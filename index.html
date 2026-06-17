@@ -135,6 +135,29 @@
   .pill.run{ color:#0e1a08; background:var(--amber); border-color:var(--amber); }
   .pill.paused{ color:var(--pause); border-color:#5a4a1f; background:#241f10; }
   .pill.shift{ color:var(--steel); border-color:#3f4a55; background:#141a20; }
+  .pill.down{ color:#fff; background:var(--err); border-color:var(--err); }
+  .mcard.down{ border-color:#5a2c1d; box-shadow:0 0 0 1px #5a2c1d99 inset, 0 0 22px -12px rgba(224,96,60,.55); }
+  .mcard.down::before{ background:var(--err); opacity:1; box-shadow:0 0 14px 1px var(--err); }
+  .wbtn{ flex:none; width:30px; height:30px; border-radius:8px; border:1px solid var(--line); background:#1a1f12; color:var(--ink-dim); display:grid; place-items:center; margin-left:6px; cursor:pointer; padding:0; }
+  .wbtn svg{ width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  .wbtn:active{ transform:scale(.94); }
+  .shiftchip{ display:inline-flex; align-items:center; gap:5px; background:#141a20; border:1px solid #3f4a55; color:var(--ink-dim);
+    padding:5px 11px; border-radius:999px; font-size:12px; cursor:pointer; }
+  .shiftchip b{ color:var(--ink); }
+  .shiftrow{ width:100%; display:flex; align-items:center; justify-content:space-between; gap:10px; background:#141a0e; border:1px solid var(--line);
+    border-radius:10px; padding:11px 13px; margin-bottom:7px; cursor:pointer; color:var(--ink); text-align:left; }
+  .shiftrow:active{ transform:scale(.995); }
+  .shiftrow .sr-l{ font-size:13.5px; } .shiftrow .sr-l b{ color:var(--ink); }
+  .shiftrow .sr-r{ display:flex; align-items:center; gap:10px; font-size:11px; color:var(--ink-dim); flex-wrap:wrap; justify-content:flex-end; }
+  .shiftrow .sr-r .am{ color:var(--amber); font-weight:600; } .shiftrow .sr-r .el{ color:var(--elec); }
+  .mlog{ border-top:1px solid var(--line); padding:8px 0; }
+  .mlog:first-child{ border-top:none; }
+  .mlog-h{ display:flex; justify-content:space-between; align-items:baseline; font-size:13px; }
+  .mlog-b{ font-size:11.5px; color:var(--ink-dim); margin-top:4px; line-height:1.5; }
+  .mlog-b b{ color:var(--ink-faint); }
+  textarea{ width:100%; background:var(--field,#10140c); border:1px solid var(--line); color:var(--ink); border-radius:10px;
+    padding:10px 12px; font-size:15px; font-family:inherit; resize:vertical; min-height:46px; }
+  textarea:focus{ outline:none; border-color:var(--accent2,#5a6b3a); }
   .pausebtn{ width:100%; margin-top:11px; padding:11px; border-radius:var(--r-sm);
     background:#241f10; border:1px solid #5a4a1f; color:var(--pause); font-size:13px; font-weight:700; letter-spacing:.06em; }
   .pausebtn:active{ transform:scale(.98); }
@@ -180,11 +203,18 @@
   .bhead{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:11px; }
   .bhead .l{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
   .bstate{ font-size:10px; letter-spacing:.1em; text-transform:uppercase; font-weight:700; padding:4px 8px; border-radius:6px; }
+  .bhint{ font-size:10.5px; color:var(--ink-faint); margin-top:9px; line-height:1.35; }
+  .bclose{ width:100%; margin-top:10px; }
   .bstate.cook{ color:var(--ember); border:1px solid #5a2c1d; background:#2a160f; }
   .bstate.ready{ color:var(--ok); border:1px solid #2f4a28; background:#16210f; }
   .qgrid{ display:grid; grid-template-columns:auto repeat(3,1fr); gap:7px 6px; align-items:center; }
   .qgrid .hdr{ font-size:9.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-faint); text-align:center; padding-bottom:2px; }
   .qgrid .qlabel{ font-size:11.5px; font-weight:700; letter-spacing:.04em; }
+  .qtake{ display:flex; align-items:center; gap:6px; cursor:pointer; user-select:none; padding:3px 2px; border-radius:7px; }
+  .qtake .qbox{ width:18px; height:18px; border-radius:5px; border:1.5px solid var(--line); display:grid; place-items:center; font-size:11px; color:var(--ok); flex:none; }
+  .qtake.on .qbox{ background:#16210f; border-color:#2f4a28; }
+  .qtake.off{ opacity:.4; }
+  .qtake.off .qdot{ opacity:.5; }
   .stagedot{ height:26px; border-radius:7px; display:grid; place-items:center; font-size:11px;
     background:#161310; border:1px solid var(--line); color:var(--ink-faint); font-family:var(--mono); }
   .stagedot.done{ background:#16210f; border-color:#2f4a28; color:var(--ok); }
@@ -397,7 +427,11 @@
 
   /* ===================== state ===================== */
   var state;
-  function blank(){ return { v:1, settings:{syncUrl:"",device:"",role:"manager",pin:"",customers:[]}, seq:{batch:0}, crumb:{truck:0,bike:0}, batches:[], runs:[], dispatches:[], machines:{} }; }
+  function blank(){ return { v:1, settings:{syncUrl:"",supabaseUrl:"",supabaseKey:"",device:"",role:"manager",pin:"",customers:[]}, seq:{batch:0}, crumb:{truck:0,bike:0}, batches:[], runs:[], dispatches:[], maintenance:[], shift:{date:todayISO(),name:autoShift()}, machines:{} }; }
+  function todayISO(){ var d=new Date(),m=d.getMonth()+1,day=d.getDate(); return d.getFullYear()+"-"+(m<10?"0":"")+m+"-"+(day<10?"0":"")+day; }
+  function autoShift(){ var h=new Date().getHours(); return (h>=6&&h<18)?"Day":"Night"; }
+  function curShift(){ if(!state.shift) state.shift={date:todayISO(),name:autoShift()}; return state.shift; }
+  function setShift(name,date){ state.shift={name:name,date:date||todayISO()}; save(); render(); }
   function load(){
     var raw=store.read(), s;
     if(raw){ try{ s=JSON.parse(raw); }catch(e){ s=blank(); } } else s=blank();
@@ -406,27 +440,48 @@
     if(s.settings.pin==null) s.settings.pin="";
     if(!s.settings.customers) s.settings.customers=[];
     if(!s.dispatches) s.dispatches=[];
+    if(!s.maintenance) s.maintenance=[];
+    if(!s.shift) s.shift={date:todayISO(),name:autoShift()};
     if(!s.crumb) s.crumb={truck:0,bike:0};
     if(s.settings.autoSync==null) s.settings.autoSync=true;
+    if(s.settings.supabaseUrl==null) s.settings.supabaseUrl="";
+    if(s.settings.supabaseKey==null) s.settings.supabaseKey="";
     if(s.lastSyncAt==null) s.lastSyncAt=0;
     if(!s.seq) s.seq={batch:0};
     if(!s.batches) s.batches=[];
     if(!s.runs) s.runs=[];
     if(!s.machines) s.machines={};
-    MACHINES.forEach(function(m){ if(!s.machines[m.id]) s.machines[m.id]={running:null}; });
+    MACHINES.forEach(function(m){ if(!s.machines[m.id]) s.machines[m.id]={running:null,down:null}; else if(s.machines[m.id].down===undefined) s.machines[m.id].down=null; });
     state=s;
   }
   function save(){ store.write(JSON.stringify(state)); scheduleAutoSync(); }
   function uid(){ try{ if(crypto&&crypto.randomUUID) return crypto.randomUUID(); }catch(e){} return "r"+Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
 
   /* ===================== helpers ===================== */
-  function eligibleBatches(){ return state.batches.filter(function(b){ return b.autoclaveDone; }); }
+  function eligibleBatches(){ return state.batches.filter(function(b){ return b.autoclaveDone && !b.closed; }); }
+  function batchTaken(b){ return (b.qualities && b.qualities.length) ? b.qualities : []; }
+  function qualWeighed(b,q){ return state.runs.some(function(r){ return r.batchId===b.id && r.machineId==="R4" && r.quality===q && r.weightKg!==""&&r.weightKg!=null; }); }
+  function allTakenWeighed(b){ var t=batchTaken(b); if(!t.length) return false;
+    for(var i=0;i<t.length;i++){ if(!qualWeighed(b,t[i])) return false; } return true; }
+  function activeBatches(){ return state.batches.filter(function(b){ return !b.closed; }); }
+  function markTaken(batchId,q){ var b=batch(batchId); if(!b||b.closed) return; b.qualities=b.qualities||[];
+    var i=b.qualities.indexOf(q); if(i<0) b.qualities.push(q); else b.qualities.splice(i,1); save(); render(); }
+  function openCloseConfirm(id){ var b=batch(id); if(!b) return;
+    var t=batchTaken(b), nW=0; t.forEach(function(q){ if(qualWeighed(b,q)) nW++; });
+    if(!t.length){ toast("Mark which qualities were taken first","warn"); return; }
+    if(nW<t.length){ toast("Weigh all marked qualities first ("+nW+"/"+t.length+")","warn"); return; }
+    openSheet('<div class="sheet-h"><b>Close batch '+esc(b.no)+'?</b></div>'+
+      '<div class="sheet-sub">All '+t.length+' marked qualities are weighed. Closing removes it from the active batch and refiner lists. It stays available in Dispatch and History.</div>'+
+      '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button>'+
+      '<button class="btn primary" data-closebatch-go="'+b.id+'">Close batch</button></div>'); }
+  function closeBatch(id){ var b=batch(id); if(!b) return; b.closed=true; save(); closeSheet(); render(); toast("Batch "+b.no+" closed","ok"); }
   function batch(id){ for(var i=0;i<state.batches.length;i++) if(state.batches[i].id===id) return state.batches[i]; return null; }
   function isComplete(r){ return r.machineId==="R4" ? (r.weightKg!=="" && r.weightKg!=null) : true; }
   function pendingWeigh(){ return state.runs.filter(function(r){ return (r.needsWeigh||r.machineId==="R4") && (r.weightKg===""||r.weightKg==null); }); }
   function unsynced(){ return state.runs.filter(function(r){ return !r.synced && isComplete(r); }); }
   function unsyncedDispatches(){ return (state.dispatches||[]).filter(function(d){ return !d.synced; }); }
-  function unsyncedCount(){ return unsynced().length + unsyncedDispatches().length; }
+  function unsyncedMaintenance(){ return (state.maintenance||[]).filter(function(x){ return !x.synced; }); }
+  function unsyncedCount(){ return unsynced().length + unsyncedDispatches().length + unsyncedMaintenance().length; }
   function runningCount(){ var n=0; MACHINES.forEach(function(m){ if(state.machines[m.id].running) n++; }); return n; }
 
   function fmtElapsed(ms){ var s=Math.max(0,Math.floor(ms/1000));
@@ -468,7 +523,7 @@
     if(crumbAvail("truck") < m.capacity){ toast("Not enough truck crumb ("+crumbAvail("truck")+" / "+m.capacity+" kg)","err"); return; }
     takeCrumb("truck", m.capacity);
     var b={ id:uid(), no:batchNo, capacity:m.capacity, formulation:formulationName,
-            autoclaveId:m.id, paired:!!paired, startedAt:Date.now(), autoclaveDone:false };
+            autoclaveId:m.id, paired:!!paired, startedAt:Date.now(), autoclaveDone:false, qualities:[] };
     state.batches.push(b);
     state.machines[mid].running={ batchId:b.id, quality:"", segStart:Date.now(), accumMs:0, paused:false };
     save(); closeSheet(); render(); toast("Loaded "+batchNo+" on "+m.name,"ok");
@@ -570,6 +625,7 @@
 
     var b=batch(run.batchId);
     var sv=srcVals(run.sourceBatches);
+    if(m.id==="R4" && run.quality && b){ b.qualities=b.qualities||[]; if(b.qualities.indexOf(run.quality)<0) b.qualities.push(run.quality); }
     // Re-run of the same batch + quality on the same machine -> add into the existing row
     var existing=null;
     for(var i=0;i<state.runs.length;i++){ var r=state.runs[i];
@@ -594,6 +650,7 @@
       id:uid(), device:state.settings.device||"", machine:m.name, machineId:m.id, short:m.short, kind:m.kind, line:"special",
       batchId:b.id, batchNo:b.no, capacity:b.capacity, formulation:b.formulation,
       autoclaveId:b.autoclaveId||"", paired:!!b.paired, passes:1,
+      shiftDate:curShift().date, shift:curShift().name,
       quality:run.quality||"", start:run.segStart||run.start||end, end:end, runtimeMin:runtimeMin,
       hoursRun:Math.round((runtimeMin/60)*100)/100,
       src1:sv.src1, src2:sv.src2, src3:sv.src3, src4:sv.src4,
@@ -637,11 +694,87 @@
   function autoSync(){
     if(!autoSyncOn() || syncing) return;
     if(typeof navigator!=="undefined" && navigator.onLine===false) return;
-    if(!(state.settings.syncUrl||"").trim()) return;
+    if(!syncTarget()) return;
     if(unsyncedCount()===0) return;
     syncNow({auto:true});
   }
+  function syncTarget(){
+    if((state.settings.supabaseUrl||"").trim() && (state.settings.supabaseKey||"").trim()) return "supabase";
+    if((state.settings.syncUrl||"").trim()) return "sheet";
+    return null;
+  }
   function syncNow(opts){
+    opts=opts||{}; var tgt=syncTarget();
+    if(!tgt){ if(!opts.auto) toast("Add your Supabase URL & key in Settings first","warn"); return; }
+    if(tgt==="supabase") return syncSupabase(opts);
+    return syncSheet(opts);
+  }
+
+  /* ---- Supabase REST sync (proper CORS, confirmed writes, upsert by id) ---- */
+  function sbN(v){ return (v===""||v==null||(typeof v==="number"&&isNaN(v)))?null:v; }
+  function sbISO(ms){ return (ms==null||ms==="")?null:new Date(ms).toISOString(); }
+  function sbStr(v){ return (v===""||v==null)?null:String(v); }
+  function runToSb(r){ return {
+    id:r.id, device:sbStr(r.device), line:sbStr(r.line), machine_id:sbStr(r.machineId), machine:sbStr(r.machine),
+    kind:sbStr(r.kind), batch_no:sbStr(r.batchNo), shift_date:sbN(r.shiftDate), shift:sbN(r.shift),
+    capacity:sbN(r.capacity), formulation:sbStr(r.formulation), autoclave_id:sbStr(r.autoclaveId),
+    paired:(r.paired==null?null:!!r.paired), quality:sbN(r.quality), tyre_type:sbN(r.tyreType), mesh:sbN(r.mesh),
+    passes:sbN(r.passes), started_at:sbISO(r.start), ended_at:sbISO(r.end),
+    runtime_min:sbN(r.runtimeMin), hours_run:sbN(r.hoursRun), kwh:sbN(r.kWh), firewood_kg:sbN(r.firewoodKg),
+    workers:sbN(r.workers), weight_kg:sbN(r.weightKg),
+    src1:sbN(r.src1), src2:sbN(r.src2), src3:sbN(r.src3), src4:sbN(r.src4) }; }
+  function dispToSb(d){ return {
+    id:d.id, device:sbStr(d.device), dispatched_at:sbISO(d.ts), batch_no:sbStr(d.batchNo),
+    formulation:sbStr(d.formulation), customer_code:sbN(d.customerCode), customer_name:sbN(d.customerName),
+    price:sbN(d.price), sacks:sbN(d.sacks), weight_kg:sbN(d.weightKg), driver:sbN(d.driver), quality:sbN(d.quality) }; }
+  function maintToSb(m){ return {
+    id:m.id, device:sbStr(m.device), machine_id:sbStr(m.machineId), machine:sbStr(m.machine),
+    down_start:sbISO(m.downStart), repaired_at:sbISO(m.repairedAt), downtime_min:sbN(m.downtimeMin),
+    root_cause:sbN(m.rootCause), resolution:sbN(m.resolution), prevention:sbN(m.prevention) }; }
+  function sbPush(table, rows){
+    var base=(state.settings.supabaseUrl||"").trim().replace(/\/+$/,"");
+    var key=(state.settings.supabaseKey||"").trim();
+    return fetch(base+"/rest/v1/"+table+"?on_conflict=id",{
+      method:"POST",
+      headers:{ "apikey":key, "Authorization":"Bearer "+key, "Content-Type":"application/json",
+        "Prefer":"resolution=merge-duplicates,return=minimal" },
+      body:JSON.stringify(rows)
+    }).then(function(res){
+      if(!res.ok) return res.text().then(function(t){ throw new Error("HTTP "+res.status+" "+(t||"").slice(0,180)); });
+      return true;
+    });
+  }
+  function markSynced(arr, items){ var set={}; items.forEach(function(x){ set[x.id]=1; }); arr.forEach(function(x){ if(set[x.id]) x.synced=true; }); }
+  function syncErr(e){
+    var m=(e&&e.message)||"no connection";
+    if(typeof location!=="undefined" && location.protocol==="file:")
+      return "Can't reach the database — the app is open as a downloaded file. Host it and open the https link instead.";
+    if(/fetch|network|load failed/i.test(m))
+      return "Can't reach the database. Check this tablet is online, and that the Supabase URL & anon key are both filled in correctly.";
+    return "Sync failed: "+m;
+  }
+  function syncSupabase(opts){
+    opts=opts||{}; var quiet=!!opts.auto;
+    var pending=unsynced(), pendD=unsyncedDispatches(), pendM=unsyncedMaintenance();
+    if(!pending.length && !pendD.length && !pendM.length){ if(!quiet) toast("Nothing new to sync","ok"); return; }
+    if(syncing) return; syncing=true; if(!quiet) render();
+    var jobs=[];
+    if(pending.length) jobs.push(sbPush("runs", pending.map(runToSb)).then(function(){ markSynced(state.runs, pending); }));
+    if(pendD.length) jobs.push(sbPush("dispatches", pendD.map(dispToSb)).then(function(){ markSynced(state.dispatches, pendD); }));
+    if(pendM.length) jobs.push(sbPush("maintenance", pendM.map(maintToSb)).then(function(){ markSynced(state.maintenance, pendM); }));
+    Promise.all(jobs).then(function(){
+      state.lastSyncAt=Date.now(); syncing=false; store.write(JSON.stringify(state));
+      var n=pending.length+pendD.length+pendM.length;
+      var sheetOpen=document.getElementById("sheet") && document.getElementById("sheet").classList.contains("show");
+      if(!quiet){ render(); toast("Saved "+n+" record"+(n>1?"s":"")+" to the database","ok"); }
+      else if(active==="settings" && !sheetOpen){ render(); }
+    }).catch(function(e){
+      syncing=false; store.write(JSON.stringify(state)); // keep any partial successes already marked
+      if(!quiet){ render(); toast(syncErr(e),"err"); }
+    });
+  }
+
+  function syncSheet(opts){
     opts=opts||{}; var quiet=!!opts.auto;
     var url=(state.settings.syncUrl||"").trim();
     if(!url){ if(!quiet) toast("Add a sync URL in Settings first","warn"); return; }
@@ -665,7 +798,7 @@
       if(!quiet){ render(); toast("Sent "+n+" record"+(n>1?"s":"")+" to the sheet","ok"); }
       else if(active==="settings" && !sheetOpen){ render(); }
     })
-    .catch(function(e){ syncing=false; if(!quiet){ render(); toast("Sync failed: "+(e.message||"no connection")+". Check the tablet is online.","err"); } });
+    .catch(function(e){ syncing=false; if(!quiet){ render(); toast(syncErr(e),"err"); } });
   }
 
   function exportCSV(){
@@ -690,6 +823,7 @@
     {id:"machines",label:"Machines",icon:'<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>'},
     {id:"batches",label:"Batches",icon:'<path d="M12 2 3 7l9 5 9-5-9-5Z"/><path d="M3 17l9 5 9-5"/><path d="M3 12l9 5 9-5"/>'},
     {id:"weigh",label:"Weigh",icon:'<path d="M12 3v3"/><path d="M5 6h14"/><path d="M5 6 2 14a4 4 0 0 0 6 0L5 6Z"/><path d="M19 6l-3 8a4 4 0 0 0 6 0l-3-8Z"/><path d="M9 20h6"/><path d="M12 6v14"/>'},
+    {id:"packing",label:"Packing",icon:'<path d="M21 8 12 3 3 8v8l9 5 9-5Z"/><path d="M3 8l9 5 9-5"/><path d="M12 13v8"/>'},
     {id:"dispatch",label:"Dispatch",icon:'<path d="M1 3h13v10H1z"/><path d="M14 7h4l3 3v3h-7z"/><circle cx="6" cy="17" r="2"/><circle cx="17" cy="17" r="2"/>'},
     {id:"history",label:"History",icon:'<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 4v4h4"/><path d="M12 8v4l3 2"/>'},
     {id:"reports",label:"Reports",icon:'<path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M22 20H2"/>'}
@@ -700,9 +834,10 @@
     return TABS.filter(function(t){ return !(sup && (t.id==="reports"||t.id==="dispatch")); });
   }
   function renderTabs(){
-    var pw=pendingWeigh().length;
+    var pw=pendingWeigh().length, pp=pendingPack().length;
     document.getElementById("tabs").innerHTML=allowedTabs().map(function(t){
-      var badge=(t.id==="weigh"&&pw>0)?'<i class="tabbadge">'+pw+'</i>':'';
+      var n=(t.id==="weigh")?pw:(t.id==="packing"?pp:0);
+      var badge=(n>0)?'<i class="tabbadge">'+n+'</i>':'';
       return '<button data-tab="'+t.id+'" class="'+(active===t.id?"active":"")+'">'+badge+
         '<svg viewBox="0 0 24 24">'+t.icon+'</svg><span>'+t.label+'</span></button>';
     }).join("");
@@ -724,7 +859,7 @@
       '<div class="crumbcell"><span class="cl">Truck crumb · 30#</span><span class="cv tnum">'+crumbAvail("truck")+' <small>kg</small></span><span class="cu">special line</span></div>'+
       '<div class="crumbcell"><span class="cl">Bike crumb · 20#</span><span class="cv tnum">'+crumbAvail("bike")+' <small>kg</small></span><span class="cu">coarse line</span></div>'+
       '</div>';
-    return '<div class="view-head"><h1>Machines</h1><div class="meta">tap to start · tap to stop</div></div>'+crumbBar+body;
+    return '<div class="view-head"><h1>Machines</h1><div class="meta"><span class="shiftchip" data-shift="1"><b>'+esc(curShift().name)+'</b> · '+esc(fmtDay(curShift().date))+' <span style="opacity:.6">▾</span></span></div></div>'+crumbBar+body;
   }
   function lastRunFor(mid){
     var last=null;
@@ -733,17 +868,23 @@
   }
   function lastCoarseFor(mid){ for(var i=state.runs.length-1;i>=0;i--){ if(state.runs[i].line==="coarse"&&state.runs[i].machineId===mid) return state.runs[i]; } return null; }
   function machineCard(m){
-    var st=state.machines[m.id], run=st.running, on=!!run;
+    var st=state.machines[m.id], run=st.running, on=!!run, down=!!st.down;
     var isShiftKind = m.kind==="coarse"||m.kind==="grind";
     var sub = m.sub ? m.sub : (m.kind==="autoclave" ? (m.capacity+" kg") : "");
     var paused = on && !!run.paused;
-    var pillTxt = on ? (paused?"Paused":"Running") : "Idle";
-    var pillCls = on ? (paused?"paused":"run") : "";
+    var pillTxt = down ? "DOWN" : (on ? (paused?"Paused":"Running") : "Idle");
+    var pillCls = down ? "down" : (on ? (paused?"paused":"run") : "");
+    var wrench = down ? '' : '<button class="wbtn" data-breakdown="'+m.id+'" aria-label="Report breakdown"><svg viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 1-5.4 5.4L4 17v3h3l5.3-5.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2-2 2.5-2.5Z"/></svg></button>';
     var head='<div class="mtop"><span class="led"></span><div class="mname"><b>'+esc(m.name)+'</b>'+
       (sub?'<small>'+esc(sub)+'</small>':'')+
-      '</div><span class="pill '+pillCls+'">'+pillTxt+'</span></div>';
+      '</div>'+wrench+'<span class="pill '+pillCls+'">'+pillTxt+'</span></div>';
     var body;
-    if(on){
+    if(down){
+      body='<div class="mbody"><div class="runline"><div class="what"><span class="qchip" style="background:var(--err);color:#fff">Breakdown</span>'+
+        '<span class="formchip">since '+fmtClock(st.down.since)+'</span></div>'+
+        '<span class="timer js-timer" data-start="'+st.down.since+'" data-paused="0">'+fmtElapsed(Date.now()-st.down.since)+'</span></div>'+
+        '<button class="pausebtn" style="border-color:#5a2c1d;color:var(--err)">🛠&nbsp; Log repair</button></div>';
+    } else if(on){
       var elapsed=elapsedOf(run), eff=Date.now()-elapsed;
       var what;
       if(run.shiftwise){
@@ -770,39 +911,132 @@
       body='<div class="mbody"><div class="idleline"><span>'+lr+'</span>'+
         '<span class="cta" style="--accent:'+m.accent+'">'+label+' ▸</span></div></div>';
     }
-    return '<div class="mcard '+(on?"on":"")+(paused?" paused":"")+'" role="button" tabindex="0" style="--accent:'+m.accent+'" data-machine="'+m.id+'">'+head+body+'</div>';
+    return '<div class="mcard '+(on?"on":"")+(paused?" paused":"")+(down?" down":"")+'" role="button" tabindex="0" style="--accent:'+m.accent+'" data-machine="'+m.id+'">'+head+body+'</div>';
   }
 
+  /* ----- breakdown & maintenance ----- */
+  function markDown(mid){ var st=state.machines[mid]; if(!st||st.down) return;
+    openSheet('<div class="sheet-h"><span class="led" style="background:var(--err)"></span><b>Report breakdown — '+esc(M(mid).name)+'?</b></div>'+
+      '<div class="sheet-sub">The machine will be flagged DOWN in red and can\'t be started until you log the repair. Down-time is counted from now.</div>'+
+      '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button>'+
+      '<button class="btn primary" data-breakdown-go="'+mid+'" style="background:var(--err)">Mark down</button></div>'); }
+  function doMarkDown(mid){ var st=state.machines[mid]; if(!st) return;
+    if(st.running && !st.running.paused){ st.running.accumMs=(st.running.accumMs||0)+(Date.now()-(st.running.segStart||Date.now())); st.running.paused=true; }
+    st.down={ since:Date.now() }; save(); closeSheet(); render(); toast(M(mid).short+" marked DOWN","warn"); postStatus(mid,"paused"); }
+  function openRepairSheet(mid){ var st=state.machines[mid]; if(!st||!st.down) return; var since=st.down.since;
+    openSheet('<div class="sheet-h"><span class="led" style="background:var(--err)"></span><b>Log repair — '+esc(M(mid).name)+'</b></div>'+
+      '<div class="sheet-sub">Down for '+fmtElapsed(Date.now()-since)+' (since '+fmtClock(since)+'). Complete the maintenance log to bring it back online.</div>'+
+      '<div class="field"><label>1 · Root cause of the breakdown</label><textarea id="mt-cause" rows="2" placeholder="What actually caused it?"></textarea></div>'+
+      '<div class="field"><label>2 · How was the issue resolved?</label><textarea id="mt-fix" rows="2" placeholder="What was done to fix it?"></textarea></div>'+
+      '<div class="field"><label>3 · Steps so it never persists</label><textarea id="mt-prev" rows="2" placeholder="Preventive action / checks added"></textarea></div>'+
+      '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button>'+
+      '<button class="btn primary" id="mt-go">Mark repaired</button></div>');
+    sheet.querySelector("#mt-go").addEventListener("click",function(){ commitMaintenance(mid,{
+      cause:(sheet.querySelector("#mt-cause").value||"").trim(),
+      fix:(sheet.querySelector("#mt-fix").value||"").trim(),
+      prev:(sheet.querySelector("#mt-prev").value||"").trim() }); });
+  }
+  function commitMaintenance(mid,f){ var st=state.machines[mid]; if(!st||!st.down) return;
+    if(!f.cause||!f.fix||!f.prev){ toast("Fill in all three questions","warn"); return; }
+    var since=st.down.since, end=Date.now();
+    state.maintenance=state.maintenance||[];
+    state.maintenance.push({ id:uid(), device:state.settings.device||"", machineId:mid, machine:M(mid).name,
+      downStart:since, repairedAt:end, downtimeMin:Math.round((end-since)/60000*10)/10,
+      rootCause:f.cause, resolution:f.fix, prevention:f.prev, synced:false });
+    st.down=null; save(); closeSheet(); render();
+    toast(M(mid).short+" back online · logged","ok"); postStatus(mid, st.running?(st.running.paused?"paused":"running"):"idle"); }
+
+  /* ----- shift context & report ----- */
+  function openShiftPicker(){ var c=curShift();
+    openSheet('<div class="sheet-h"><b>Current shift</b></div>'+
+      '<div class="sheet-sub">New special-line runs (autoclave, refiners) are tagged with this shift &amp; date for the production reports.</div>'+
+      '<div class="sheet-label">Shift</div><div class="pickgrid q4">'+
+        '<button class="pick'+(c.name==="Day"?" sel":"")+'" data-shift-set="Day"><b>Day</b></button>'+
+        '<button class="pick'+(c.name==="Night"?" sel":"")+'" data-shift-set="Night"><b>Night</b></button></div>'+
+      '<div class="field" style="margin-top:14px"><label>Date</label><input id="sh-date" type="date" value="'+esc(c.date)+'"></div>'+
+      '<div class="sheet-actions"><button class="btn primary block" data-act="close">Done</button></div>');
+    sheet.querySelectorAll("[data-shift-set]").forEach(function(el){ el.addEventListener("click",function(){
+      var name=el.getAttribute("data-shift-set"), date=(sheet.querySelector("#sh-date").value||c.date);
+      sheet.querySelectorAll("[data-shift-set]").forEach(function(g){ g.classList.remove("sel"); }); el.classList.add("sel");
+      setShift(name,date); toast("Shift set · "+name+" "+fmtDay(date),"ok"); }); });
+    sheet.querySelector("#sh-date").addEventListener("change",function(){ setShift(curShift().name, this.value); }); }
+
+  function shiftAgg(key){
+    var parts=key.split("|"), date=parts[0], shift=parts[1];
+    var a={date:date,shift:shift,reclaim:0,crumb:0,crumb30:0,crumb20:0,coarse:0,kwh:0,fw:0,min:0,runs:0,byQ:{}};
+    QUALITIES.forEach(function(q){ a.byQ[q]=0; });
+    state.runs.forEach(function(r){
+      if((r.shiftDate||"")!==date || (r.shift||"")!==shift) return;
+      a.runs++;
+      if(r.kWh!=="") a.kwh+=parseFloat(r.kWh)||0;
+      if(r.firewoodKg!=="") a.fw+=parseFloat(r.firewoodKg)||0;
+      if(r.runtimeMin) a.min+=r.runtimeMin;
+      var w=(r.weightKg!==""&&r.weightKg!=null)?(parseFloat(r.weightKg)||0):0;
+      if(r.machineId==="R4"&&r.quality){ a.reclaim+=w; a.byQ[r.quality]=(a.byQ[r.quality]||0)+w; }
+      if(r.line==="grind"){ a.crumb+=w; if(r.mesh==="30#") a.crumb30+=w; else if(r.mesh==="20#") a.crumb20+=w; }
+      if(r.line==="coarse"&&r.machineId==="R2") a.coarse+=w;
+    });
+    return a;
+  }
+  function openShiftReport(key){ var a=shiftAgg(key);
+    function ln(k,v){ return '<div class="dline"><span>'+k+'</span><span class="tnum"><b>'+v+'</b></span></div>'; }
+    var qlines=QUALITIES.filter(function(q){ return a.byQ[q]>0; }).map(function(q){ return ln('&nbsp;&nbsp;'+q, Math.round(a.byQ[q]*10)/10+' kg'); }).join("");
+    openSheet('<div class="sheet-h"><b>'+esc(a.shift)+' shift · '+esc(fmtDay(a.date))+'</b></div>'+
+      '<div class="sheet-sub">Production captured on this shift.</div>'+
+      '<div class="dlist">'+
+        ln('Reclaim produced (special)', '<span style="color:var(--amber)">'+Math.round(a.reclaim*10)/10+' kg</span>')+qlines+
+        ln('Crumb produced', Math.round(a.crumb*10)/10+' kg')+
+        ln('&nbsp;&nbsp;Truck 30#', Math.round(a.crumb30*10)/10+' kg')+
+        ln('&nbsp;&nbsp;Bike 20#', Math.round(a.crumb20*10)/10+' kg')+
+        ln('Coarse output', Math.round(a.coarse*10)/10+' kg')+
+        ln('Electricity consumed', '<span style="color:var(--elec)">'+Math.round(a.kwh*10)/10+' kWh</span>')+
+        ln('Firewood', Math.round(a.fw)+' kg')+
+        ln('Machine hours', Math.round(a.min/60*10)/10+' h')+
+        ln('Runs logged', a.runs)+
+      '</div>'+
+      '<div class="sheet-actions"><button class="btn primary block" data-act="close">Close</button></div>'); }
+
   function viewBatches(){
-    if(!state.batches.length) return '<div class="view-head"><h1>Batches</h1></div>'+
+    var act=activeBatches();
+    if(!act.length) return '<div class="view-head"><h1>Batches</h1></div>'+
       empty('<path d="M12 2 3 7l9 5 9-5-9-5Z"/><path d="M3 17l9 5 9-5"/><path d="M3 12l9 5 9-5"/>',
-        "No batches yet","Load the autoclave on the Machines tab to start one.");
-    var cards=state.batches.slice().reverse().map(batchCard).join("");
-    return '<div class="view-head"><h1>Batches</h1><div class="meta">'+state.batches.length+' total</div></div><div class="stack">'+cards+'</div>';
+        "No active batches","Load the autoclave on the Machines tab to start one. Finished batches drop off here automatically.");
+    var done=state.batches.length-act.length;
+    var cards=act.slice().reverse().map(batchCard).join("");
+    var meta=act.length+' active'+(done?' · '+done+' done':'');
+    return '<div class="view-head"><h1>Batches</h1><div class="meta">'+meta+'</div></div><div class="stack">'+cards+'</div>';
   }
   function batchCard(b){
     var rows=state.runs.filter(function(r){ return r.batchId===b.id; });
     function has(mid,q){ return rows.some(function(r){ return r.machineId===mid && r.quality===q; }); }
     function r3(q){ return has("R3",q)||has("R1",q); }
     function weighed(q){ return rows.some(function(r){ return r.machineId==="R4"&&r.quality===q&&r.weightKg!==""&&r.weightKg!=null; }); }
-    var grid='<div class="qgrid"><div></div><div class="hdr">R3/R1</div><div class="hdr">R4</div><div class="hdr">Weighed</div>';
+    var taken=b.qualities||[];
+    function isTaken(q){ return taken.indexOf(q)>-1; }
+    var grid='<div class="qgrid"><div class="hdr" style="text-align:left">Taken?</div><div class="hdr">R3/R1</div><div class="hdr">R4</div><div class="hdr">Weighed</div>';
     QUALITIES.forEach(function(q){
-      grid+='<div class="qlabel"><span class="qdot q-'+q+'" style="background:var(--q-'+q.toLowerCase()+')"></span>'+q+'</div>';
-      grid+='<div class="stagedot '+(r3(q)?"done":"")+'">'+(r3(q)?"✓":"·")+'</div>';
-      grid+='<div class="stagedot '+(has("R4",q)?"done":"")+'">'+(has("R4",q)?"✓":"·")+'</div>';
-      grid+='<div class="stagedot '+(weighed(q)?"weighed":"")+'">'+(weighed(q)?"✓":"·")+'</div>';
+      var tk=isTaken(q);
+      grid+='<div class="qlabel qtake '+(tk?"on":"off")+'" data-qtake="'+b.id+'|'+q+'"><span class="qbox">'+(tk?"✓":"")+'</span><span class="qdot q-'+q+'" style="background:var(--q-'+q.toLowerCase()+')"></span>'+q+'</div>';
+      grid+='<div class="stagedot '+(tk&&r3(q)?"done":"")+'">'+(r3(q)?"✓":"·")+'</div>';
+      grid+='<div class="stagedot '+(tk&&has("R4",q)?"done":"")+'">'+(has("R4",q)?"✓":"·")+'</div>';
+      grid+='<div class="stagedot '+(tk&&weighed(q)?"weighed":"")+'">'+(weighed(q)?"✓":"·")+'</div>';
     });
+    grid+='</div>';
     function ranShorts(kind){ var seen={},out=[]; rows.forEach(function(r){ var mm=M(r.machineId); if(mm&&mm.kind===kind&&!seen[mm.id]){ seen[mm.id]=1; out.push(mm.short); } }); return out; }
     var pre=ranShorts("prerefiner");
-    grid+='</div>';
+    var nTaken=taken.length, nW=0; taken.forEach(function(q){ if(weighed(q)) nW++; });
     var inAC=MACHINES.some(function(mm){ return mm.kind==="autoclave" && state.machines[mm.id].running && state.machines[mm.id].running.batchId===b.id; });
-    var state2=b.autoclaveDone
-      ? '<span class="bstate ready">Refining</span>'
-      : (inAC ? '<span class="bstate cook">In autoclave</span>' : '<span class="bstate cook">Loaded</span>');
+    var state2 = nTaken ? '<span class="bstate '+(nW>=nTaken?"ready":"cook")+'">'+nW+'/'+nTaken+' weighed</span>'
+      : (b.autoclaveDone ? '<span class="bstate cook">mark qualities</span>'
+        : (inAC ? '<span class="bstate cook">In autoclave</span>' : '<span class="bstate cook">Loaded</span>'));
     var srcChip=b.autoclaveId?'<span class="formchip" style="color:var(--ember)">'+esc(shortName(b.autoclaveId))+'</span>':'';
     var preChip=pre.length?'<span class="formchip" style="color:var(--elec)">'+esc(pre.join(" · "))+'</span>':'';
+    var hint='<div class="bhint">Tap a quality to mark it taken. Weigh each marked quality, then press Close batch to file it away.</div>';
+    var ready=allTakenWeighed(b);
+    var closeBtn='<button class="btn '+(ready?"primary":"ghost")+' bclose" data-closebatch="'+b.id+'">'+
+      (ready?"Close batch ▸":(nTaken?(nW+"/"+nTaken+" weighed"):"Mark qualities to close"))+'</button>';
     return '<div class="bcard"><div class="bhead"><div class="l"><span class="batchref" style="font-size:16px">'+esc(b.no)+'</span>'+
-      srcChip+'<span class="formchip">'+esc(b.formulation)+'</span>'+preChip+'</div>'+state2+'</div>'+grid+'</div>';
+      srcChip+'<span class="formchip">'+esc(b.formulation)+'</span>'+preChip+'</div>'+state2+'</div>'+grid+hint+closeBtn+'</div>';
   }
 
   function viewWeigh(){
@@ -826,78 +1060,114 @@
   }
 
   /* ===================== dispatch ===================== */
+  var SACK_KG=50, PACK_TOL=40;
   function customer(code){ var cs=state.settings.customers||[]; for(var i=0;i<cs.length;i++) if(cs[i].code===code) return cs[i]; return null; }
+  function weighedRuns(){ return state.runs.filter(function(r){ return r.machineId==="R4" && r.quality && r.weightKg!==""&&r.weightKg!=null && parseFloat(r.weightKg)>0; }); }
+  function packedSacksOf(r){ return parseFloat(r.packedSacks)||0; }
+  function packedKgOf(r){ return packedSacksOf(r)*SACK_KG; }
+  function fullyPacked(r){ return packedKgOf(r) >= (parseFloat(r.weightKg)||0) - PACK_TOL; }
+  function sacksNeeded(r){ var w=parseFloat(r.weightKg)||0; return Math.max(0, Math.ceil((w-PACK_TOL)/SACK_KG)); }
+  function dispatchedSacksFor(batchId,quality){ var t=0; (state.dispatches||[]).forEach(function(d){ if(d.batchId===batchId && (d.quality||"")===(quality||"")) t+=parseFloat(d.sacks)||0; }); return t; }
+  function availSacksOf(r){ return packedSacksOf(r) - dispatchedSacksFor(r.batchId, r.quality); }
+  function pendingPack(){ return weighedRuns().filter(function(r){ return !fullyPacked(r); }); }
+  function dispatchableQ(){ return weighedRuns().filter(function(r){ return fullyPacked(r) && availSacksOf(r)>0; }); }
   function dispatchesFor(batchId){ return (state.dispatches||[]).filter(function(d){ return d.batchId===batchId; }); }
   function batchSacks(batchId){ var t=0; dispatchesFor(batchId).forEach(function(d){ t+=parseFloat(d.sacks)||0; }); return t; }
 
+  /* ----- packing ----- */
+  function viewPacking(){
+    var p=pendingPack();
+    if(!p.length) return '<div class="view-head"><h1>Packing</h1></div>'+
+      empty('<path d="M21 8 12 3 3 8v8l9 5 9-5Z"/><path d="M3 8l9 5 9-5"/><path d="M12 13v8"/>',
+        "Nothing to pack","Weigh a quality on R4 and it lands here to be packed into sacks.");
+    var cards=p.slice().reverse().map(function(r){
+      var b=batch(r.batchId); var w=parseFloat(r.weightKg)||0, ps=packedSacksOf(r), pk=ps*SACK_KG, rem=Math.max(0,w-pk), need=sacksNeeded(r);
+      var prog = ps>0 ? '<small style="color:var(--elec)">'+ps+' sacks packed · '+pk+' kg · '+rem+' kg left</small>'
+                      : '<small>weighed '+w+' kg · ≈ '+need+' sacks ('+SACK_KG+' kg each)</small>';
+      return '<div class="wcard"><div class="info"><div class="row1"><span class="batchref">'+esc(b?b.no:'?')+'</span>'+qchip(r.quality)+'<span class="formchip">'+esc(b?b.formulation:'')+'</span></div>'+prog+'</div>'+
+        '<button class="btn primary" data-pack="'+r.id+'">'+(ps>0?'Update ▸':'Pack ▸')+'</button></div>';
+    }).join("");
+    return '<div class="view-head"><h1>Packing</h1><div class="meta">'+p.length+' to pack</div></div><div class="stack">'+cards+'</div>';
+  }
+  function openPackSheet(runId){
+    var r=weighRow(runId); if(!r) return; var b=batch(r.batchId);
+    var w=parseFloat(r.weightKg)||0, ps=packedSacksOf(r), need=sacksNeeded(r);
+    openSheet('<div class="sheet-h"><span class="led" style="background:var(--elec)"></span><b>Pack '+esc(b?b.no:'')+' · '+esc(r.quality)+'</b></div>'+
+      '<div class="sheet-sub">Weighed '+w+' kg · about '+need+' sacks of '+SACK_KG+' kg. It clears packing once you\'re within '+PACK_TOL+' kg.</div>'+
+      '<div class="field"><label>Sacks packed (total so far)</label><input id="pk-s" type="number" inputmode="numeric" value="'+(ps||"")+'" placeholder="'+need+'"></div>'+
+      '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button>'+
+      '<button class="btn primary" id="pk-go">Save</button></div>');
+    sheet.querySelector("#pk-go").addEventListener("click",function(){ setPacked(runId, num(sheet.querySelector("#pk-s").value)); });
+  }
+  function setPacked(runId, sacks){
+    var r=weighRow(runId); if(!r) return; var b=batch(r.batchId);
+    if(sacks==null||sacks<0){ toast("Enter the sacks packed","warn"); return; }
+    r.packedSacks=sacks; r.synced=false; save(); closeSheet(); render();
+    if(fullyPacked(r)) toast(b.no+" · "+r.quality+" fully packed — ready to dispatch","ok");
+    else toast("Saved "+sacks+" sacks","ok");
+  }
+
   function viewDispatch(){
-    var dispatchable=state.batches.filter(function(b){ return b.autoclaveDone; });
-    if(!dispatchable.length) return '<div class="view-head"><h1>Dispatch</h1></div>'+
+    var items=dispatchableQ();
+    if(!items.length) return '<div class="view-head"><h1>Dispatch</h1></div>'+
       empty('<path d="M1 3h13v10H1z"/><path d="M14 7h4l3 3v3h-7z"/><circle cx="6" cy="17" r="2"/><circle cx="17" cy="17" r="2"/>',
-        "Nothing to dispatch yet","Once a batch has been through the autoclave it can be dispatched here.");
-    if(!(state.settings.customers||[]).length){
-      // still show batches, but nudge to add customers
-    }
-    var cards=dispatchable.slice().reverse().map(function(b){
-      var ds=dispatchesFor(b.id), sacks=batchSacks(b.id);
+        "Nothing ready to dispatch","Pack a weighed quality in the Packing tab and it shows up here with its available sacks.");
+    var cards=items.slice().reverse().map(function(r){
+      var b=batch(r.batchId); var avail=availSacksOf(r), packed=packedSacksOf(r), out=dispatchedSacksFor(r.batchId,r.quality);
+      var ds=(state.dispatches||[]).filter(function(d){ return d.batchId===r.batchId && (d.quality||"")===(r.quality||""); });
       var lines=ds.slice().reverse().map(function(d){
-        return '<div class="dline"><span><b>'+esc(d.sacks)+'</b> sacks → '+esc(d.customerCode)+(d.driver?' · '+esc(d.driver):'')+(d.quality?' · '+esc(d.quality):'')+'</span><span class="muted tnum">'+fmtClock(d.ts)+'</span></div>';
+        return '<div class="dline"><span><b>'+esc(d.sacks)+'</b> sacks → '+esc(d.customerCode)+(d.driver?' · '+esc(d.driver):'')+'</span><span class="muted tnum">'+fmtClock(d.ts)+'</span></div>';
       }).join("");
-      var status = ds.length ? '<span class="bstate ready">'+sacks+' sacks out</span>' : '<span class="bstate cook" style="color:var(--ink-dim);border-color:var(--line);background:#1a1f12">Not dispatched</span>';
-      return '<div class="bcard"><div class="bhead"><div class="l"><span class="batchref" style="font-size:16px">'+esc(b.no)+'</span>'+
-        (b.autoclaveId?'<span class="formchip" style="color:var(--ember)">'+esc(shortName(b.autoclaveId))+'</span>':'')+
-        '<span class="formchip">'+esc(b.formulation)+'</span></div>'+status+'</div>'+
+      return '<div class="bcard"><div class="bhead"><div class="l"><span class="batchref" style="font-size:16px">'+esc(b?b.no:'?')+'</span>'+qchip(r.quality)+
+        '<span class="formchip">'+esc(b?b.formulation:'')+'</span></div><span class="bstate ready">'+avail+' sacks ready</span></div>'+
+        '<div class="bhint">'+packed+' packed · '+out+' dispatched · '+(avail*SACK_KG)+' kg available</div>'+
         (lines?'<div class="dlist">'+lines+'</div>':'')+
-        '<button class="btn primary block" style="margin-top:11px" data-dispatch="'+b.id+'">+ Dispatch '+esc(b.no)+'</button></div>';
+        '<button class="btn primary block" style="margin-top:11px" data-dispatch="'+r.id+'">+ Dispatch '+esc(r.quality)+'</button></div>';
     }).join("");
     return '<div class="view-head"><h1>Dispatch</h1><div class="meta">'+(state.dispatches||[]).length+' loads</div></div><div class="stack">'+cards+'</div>';
   }
 
-  function openDispatchSheet(batchId){
-    var b=batch(batchId); if(!b) return;
+  function openDispatchSheet(runId){
+    var r=weighRow(runId); if(!r) return; var b=batch(r.batchId); if(!b) return;
+    var avail=availSacksOf(r);
     var cs=state.settings.customers||[];
     if(!cs.length){
-      openSheet('<div class="sheet-h"><span class="led" style="display:none"></span><b>No customers yet</b></div>'+
+      openSheet('<div class="sheet-h"><b>No customers yet</b></div>'+
         '<div class="sheet-sub">Add customer codes and their selling price in Settings first — that\'s what lets us track profit per batch.</div>'+
         '<div class="sheet-actions"><button class="btn ghost" data-act="close">Close</button>'+
         '<button class="btn primary" data-act="go-customers">Go to Settings</button></div>');
       return;
     }
-    var picks={ code:null, quality:null };
+    var picks={ code:null };
     var custBtns=cs.map(function(c){
       return '<button class="pick" data-pick-cust="'+esc(c.code)+'"><b>'+esc(c.code)+'</b><small>'+(c.name?esc(c.name)+' · ':'')+'₹'+esc(c.price)+'/kg</small></button>';
     }).join("");
-    var qBtns='<button class="pick q" data-pick-dq=""><b>—</b><small>whole batch</small></button>'+
-      QUALITIES.map(function(q){ return '<button class="pick q" data-pick-dq="'+q+'"><b><span class="qdot" style="background:var(--q-'+q.toLowerCase()+')"></span>'+q+'</b></button>'; }).join("");
-    openSheet('<div class="sheet-h"><span class="led" style="background:radial-gradient(circle at 35% 30%,#c8f0a0,var(--amber));box-shadow:0 0 10px 1px var(--amber)"></span><b>Dispatch '+esc(b.no)+'</b></div>'+
-      '<div class="sheet-sub">'+esc(b.formulation)+'</div>'+
+    openSheet('<div class="sheet-h"><span class="led" style="background:radial-gradient(circle at 35% 30%,#c8f0a0,var(--amber));box-shadow:0 0 10px 1px var(--amber)"></span><b>Dispatch '+esc(b.no)+' · '+esc(r.quality)+'</b></div>'+
+      '<div class="sheet-sub">'+avail+' sacks available ('+(avail*SACK_KG)+' kg) · '+esc(b.formulation)+'</div>'+
       '<div class="sheet-label">Customer</div><div class="pickgrid">'+custBtns+'</div>'+
-      '<div class="field-inline" style="margin-top:16px"><div class="field"><label>Sacks dispatched</label><input id="d-sacks" type="number" inputmode="numeric" placeholder="0"></div>'+
-      '<div class="field"><label>Net weight <span class="muted" style="text-transform:none;letter-spacing:0">— optional</span></label><div class="num-suffix"><input id="d-wt" type="number" inputmode="decimal" placeholder="0"><span class="sfx">kg</span></div></div></div>'+
-      '<div class="field"><label>Driver</label><input id="d-driver" type="text" autocomplete="off" placeholder="Driver name / vehicle no."></div>'+
-      '<div class="sheet-label">Quality <span class="muted" style="text-transform:none;letter-spacing:0;font-weight:400">(optional)</span></div><div class="pickgrid q4">'+qBtns+'</div>'+
+      '<div class="field-inline" style="margin-top:16px"><div class="field"><label>Sacks dispatched</label><input id="d-sacks" type="number" inputmode="numeric" placeholder="0 / '+avail+'"></div>'+
+      '<div class="field"><label>Driver</label><input id="d-driver" type="text" autocomplete="off" placeholder="Driver / vehicle"></div></div>'+
       '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button>'+
       '<button class="btn primary" id="d-go">Log dispatch</button></div>');
     function sel(grp,one){ grp.forEach(function(g){ g.classList.remove("sel"); }); one.classList.add("sel"); }
     sheet.querySelectorAll("[data-pick-cust]").forEach(function(el){ el.addEventListener("click",function(){ picks.code=el.getAttribute("data-pick-cust"); sel(sheet.querySelectorAll("[data-pick-cust]"),el); }); });
-    sheet.querySelectorAll("[data-pick-dq]").forEach(function(el){ el.addEventListener("click",function(){ picks.quality=el.getAttribute("data-pick-dq"); sel(sheet.querySelectorAll("[data-pick-dq]"),el); }); });
     sheet.querySelector("#d-go").addEventListener("click",function(){
-      commitDispatch(batchId,{ code:picks.code, sacks:num(sheet.querySelector("#d-sacks").value),
-        weightKg:num(sheet.querySelector("#d-wt").value), driver:(sheet.querySelector("#d-driver").value||"").trim(),
-        quality:picks.quality||"" });
+      commitDispatch(r,{ code:picks.code, sacks:num(sheet.querySelector("#d-sacks").value), driver:(sheet.querySelector("#d-driver").value||"").trim() });
     });
   }
-  function commitDispatch(batchId, f){
-    var b=batch(batchId); if(!b) return;
+  function commitDispatch(r, f){
+    var b=batch(r.batchId); if(!b) return;
     if(!f.code){ toast("Pick a customer","warn"); return; }
     if(f.sacks==null||f.sacks<=0){ toast("Enter sacks dispatched","warn"); return; }
+    var avail=availSacksOf(r);
+    if(f.sacks>avail){ toast("Only "+avail+" sacks available","warn"); return; }
     if(!f.driver){ toast("Enter the driver","warn"); return; }
     var c=customer(f.code), ts=Date.now();
     var rec={ id:uid(), device:state.settings.device||"", ts:ts, batchId:b.id, batchNo:b.no, formulation:b.formulation,
       customerCode:f.code, customerName:c?c.name:"", price:c?c.price:"", sacks:f.sacks,
-      weightKg:f.weightKg==null?"":f.weightKg, driver:f.driver, quality:f.quality||"", synced:false };
+      weightKg:f.sacks*SACK_KG, driver:f.driver, quality:r.quality||"", synced:false };
     state.dispatches.push(rec); b.customerCode=f.code;
-    save(); closeSheet(); render(); toast("Dispatched "+f.sacks+" sacks · "+b.no+" → "+f.code,"ok");
+    save(); closeSheet(); render(); toast("Dispatched "+f.sacks+" sacks · "+b.no+" "+r.quality+" → "+f.code,"ok");
   }
 
   function viewHistory(){
@@ -947,6 +1217,7 @@
     });
     var maxQ=Math.max(1,byQ.Special,byQ.SuperFine,byQ.Fine,byQ.Medium);
     var totW=byQ.Special+byQ.SuperFine+byQ.Fine+byQ.Medium;
+    var maint=(state.maintenance||[]); var downMin=0; maint.forEach(function(x){ downMin+=parseFloat(x.downtimeMin)||0; });
 
     var stats='<div class="statgrid">'+
       stat(crumbAvail("truck"),"kg","Truck crumb · 30#")+
@@ -961,6 +1232,8 @@
       stat(Math.round(ground*10)/10,"kg","Crumb produced")+
       stat(Math.round(coarse*10)/10,"kg","Coarse output")+
       stat(state.dispatches?state.dispatches.length:0,"","Dispatches")+
+      stat(maint.length,"","Breakdowns")+
+      stat(Math.round(downMin),"min","Downtime")+
       '</div>';
 
     var wq=QUALITIES.map(function(q){
@@ -970,11 +1243,27 @@
         '<span class="val tnum">'+(Math.round(v*10)/10)+' kg</span></div>';
     }).join("");
 
+    var shiftMap={};
+    runs.forEach(function(r){ if(!r.shiftDate||!r.shift) return; shiftMap[r.shiftDate+"|"+r.shift]=1; });
+    var shiftKeys=Object.keys(shiftMap).sort().reverse();
+    var shiftRows=shiftKeys.map(function(k){ var a=shiftAgg(k);
+      return '<button class="shiftrow" data-shiftreport="'+k+'"><div class="sr-l"><b>'+esc(a.shift)+'</b> · '+esc(fmtDay(a.date))+'</div>'+
+        '<div class="sr-r"><span class="am">'+Math.round(a.reclaim)+' kg</span><span>'+Math.round(a.crumb)+' kg crumb</span><span class="el">'+Math.round(a.kwh)+' kWh</span><span style="opacity:.5">›</span></div></button>';
+    }).join("");
+    var shiftPanel = shiftKeys.length ? '<div class="panel" style="margin-top:14px"><div class="sheet-label" style="margin:0 0 8px">Production by shift <span class="muted" style="text-transform:none;letter-spacing:0">— tap for the full breakdown</span></div>'+shiftRows+'</div>' : '';
+
+    var maintRows=maint.slice().reverse().slice(0,6).map(function(x){
+      return '<div class="mlog"><div class="mlog-h"><b>'+esc(x.machine)+'</b><span class="muted">'+Math.round(x.downtimeMin)+' min · '+fmtClock(x.repairedAt)+'</span></div>'+
+        '<div class="mlog-b"><b>Cause:</b> '+esc(x.rootCause)+'<br><b>Fix:</b> '+esc(x.resolution)+'<br><b>Prevent:</b> '+esc(x.prevention)+'</div></div>';
+    }).join("");
+    var maintPanel = maint.length ? '<div class="panel" style="margin-top:14px"><div class="sheet-label" style="margin:0 0 8px">Maintenance log · '+Math.round(downMin)+' min total downtime</div>'+maintRows+'</div>' : '';
+
     return '<div class="view-head"><h1>Reports</h1><div class="meta">live totals</div></div>'+
-      stats+
+      stats+shiftPanel+
       '<div class="panel" style="margin-top:14px"><div class="sheet-label" style="margin:0 0 6px">Weighed output by quality</div>'+wq+
       '<div class="wq" style="border-top:1px solid var(--line);margin-top:4px"><span style="min-width:74px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);font-weight:700">Total</span>'+
-      '<span class="wbar" style="background:none"></span><span class="val tnum" style="color:var(--amber)">'+(Math.round(totW*10)/10)+' kg</span></div></div>';
+      '<span class="wbar" style="background:none"></span><span class="val tnum" style="color:var(--amber)">'+(Math.round(totW*10)/10)+' kg</span></div></div>'+
+      maintPanel;
   }
   function stat(v,unit,k){ return '<div class="stat"><div class="v tnum">'+v+(unit?'<small>'+unit+'</small>':'')+'</div><div class="k">'+k+'</div></div>'; }
   function empty(icon,big,sub){ return '<div class="empty"><svg viewBox="0 0 24 24">'+icon+'</svg><div class="big">'+esc(big)+'</div><div>'+esc(sub)+'</div></div>'; }
@@ -998,9 +1287,15 @@
       '<div class="panel" style="margin-top:14px"><div class="field"><label>Device name</label>'+
       '<input id="set-device" type="text" placeholder="e.g. Floor Tablet 1" value="'+esc(state.settings.device)+'">'+
       '<div class="hint">Tags every captured row so you can tell devices apart.</div></div>'+
-      '<div class="field"><label>Sync URL (Google Apps Script)</label>'+
+      '<div class="field"><label>Supabase URL</label>'+
+      '<input id="set-sburl" type="url" inputmode="url" placeholder="https://xxxx.supabase.co" value="'+esc(state.settings.supabaseUrl)+'">'+
+      '<div class="hint">Your project URL. Runs, dispatches & maintenance save straight into your database.</div></div>'+
+      '<div class="field"><label>Supabase anon key</label>'+
+      '<input id="set-sbkey" type="text" autocomplete="off" spellcheck="false" placeholder="eyJhbGciOiJ…" value="'+esc(state.settings.supabaseKey)+'">'+
+      '<div class="hint">The public "anon" key from Project Settings → API. Safe to store on the tablet.</div></div>'+
+      '<div class="field"><label>Sync URL <span class="muted" style="text-transform:none;letter-spacing:0">— optional, old Google Sheet path</span></label>'+
       '<input id="set-url" type="url" inputmode="url" placeholder="https://script.google.com/macros/s/…/exec" value="'+esc(state.settings.syncUrl)+'">'+
-      '<div class="hint">Paste your deployed web-app /exec URL. Rows POST here into your Google Sheet.</div></div>'+
+      '<div class="hint">Only used if no Supabase URL is set above.</div></div>'+
       '<button class="btn primary block" data-act="save-settings">Save settings</button></div>'+
 
       '<div class="panel" style="margin-top:14px"><div class="sheet-label" style="margin:0 0 10px">Sync</div>'+
@@ -1011,8 +1306,8 @@
       '<div class="syncrow"><button class="btn elec" data-act="sync"'+(syncing?' disabled':'')+'>'+(syncing?"Syncing…":"Sync now")+'</button>'+
       '<button class="btn ghost" data-act="export">Export CSV</button></div>'+
       '<div style="margin-top:8px"><button class="btn ghost block" data-act="resync">Re-send all data</button></div>'+
-      '<div class="hint" style="margin-top:10px">"Re-send all" pushes every record again. It is safe — the sheet updates rows by id and won\'t duplicate. '+esc(storeNote)+'</div>'+
-      '<div class="hint" style="margin-top:6px;opacity:.7">Build: sync v4 · live status</div></div>'+
+      '<div class="hint" style="margin-top:10px">"Re-send all" pushes every record again. It is safe — records update by id and won\'t duplicate. '+esc(storeNote)+'</div>'+
+      '<div class="hint" style="margin-top:6px;opacity:.7">Build: sync v5 · supabase</div></div>'+
 
       '<div class="panel" style="margin-top:14px"><div class="sheet-label" style="margin:0 0 10px">Customers & selling price</div>'+
       ((state.settings.customers||[]).length
@@ -1040,6 +1335,7 @@
 
   function openMachineSheet(mid){
     var m=M(mid), st=state.machines[mid];
+    if(st.down) return openRepairSheet(mid);
     if(st.running) return openOffSheet(mid);
     if(m.kind==="coarse"||m.kind==="grind") return openShiftStart(mid);
     if(m.kind==="autoclave") return openAutoclaveOn(mid);
@@ -1306,6 +1602,7 @@
     if(active==="machines") html=viewMachines();
     else if(active==="batches") html=viewBatches();
     else if(active==="weigh") html=viewWeigh();
+    else if(active==="packing") html=viewPacking();
     else if(active==="dispatch") html=viewDispatch();
     else if(active==="history") html=viewHistory();
     else if(active==="reports") html=viewReports();
@@ -1327,8 +1624,16 @@
     var t;
     if((t=e.target.closest("[data-pause]"))){ var pid=t.getAttribute("data-pause");
       if(state.machines[pid].running && state.machines[pid].running.paused) resumeMachine(pid); else pauseMachine(pid); return; }
+    if((t=e.target.closest("[data-qtake]"))){ var qt=t.getAttribute("data-qtake").split("|"); markTaken(qt[0],qt[1]); return; }
+    if((t=e.target.closest("[data-closebatch-go]"))){ closeBatch(t.getAttribute("data-closebatch-go")); return; }
+    if((t=e.target.closest("[data-closebatch]"))){ openCloseConfirm(t.getAttribute("data-closebatch")); return; }
+    if((t=e.target.closest("[data-breakdown-go]"))){ doMarkDown(t.getAttribute("data-breakdown-go")); return; }
+    if((t=e.target.closest("[data-breakdown]"))){ markDown(t.getAttribute("data-breakdown")); return; }
+    if((t=e.target.closest("[data-shift]"))){ openShiftPicker(); return; }
+    if((t=e.target.closest("[data-shiftreport]"))){ openShiftReport(t.getAttribute("data-shiftreport")); return; }
     if((t=e.target.closest("[data-machine]"))){ openMachineSheet(t.getAttribute("data-machine")); return; }
     if((t=e.target.closest("[data-weigh]"))){ openWeighSheet(t.getAttribute("data-weigh")); return; }
+    if((t=e.target.closest("[data-pack]"))){ openPackSheet(t.getAttribute("data-pack")); return; }
     if((t=e.target.closest("[data-dispatch]"))){ openDispatchSheet(t.getAttribute("data-dispatch")); return; }
     if((t=e.target.closest("[data-custdel]"))){ var cd=t.getAttribute("data-custdel");
       state.settings.customers=(state.settings.customers||[]).filter(function(c){ return c.code!==cd; }); save(); render(); return; }
@@ -1355,19 +1660,25 @@
     else if(act==="resync"){
       state.runs.forEach(function(x){ x.synced=false; });
       (state.dispatches||[]).forEach(function(x){ x.synced=false; });
+      (state.maintenance||[]).forEach(function(x){ x.synced=false; });
       save(); render(); syncNow();
     }
     else if(act==="export"){ exportCSV(); }
     else if(act==="set-role"){
       var dEl=document.getElementById("set-device"), uEl=document.getElementById("set-url"), pEl=document.getElementById("set-pin");
+      var sbU=document.getElementById("set-sburl"), sbK=document.getElementById("set-sbkey");
       if(dEl) state.settings.device=(dEl.value||"").trim();
       if(uEl) state.settings.syncUrl=(uEl.value||"").trim();
+      if(sbU) state.settings.supabaseUrl=(sbU.value||"").trim();
+      if(sbK) state.settings.supabaseKey=(sbK.value||"").trim();
       if(pEl) state.settings.pin=(pEl.value||"").replace(/\D/g,"").slice(0,6);
       state.settings.role=a.getAttribute("data-role"); save(); render();
     }
     else if(act==="save-settings"){
       state.settings.device=(document.getElementById("set-device").value||"").trim();
       state.settings.syncUrl=(document.getElementById("set-url").value||"").trim();
+      state.settings.supabaseUrl=(document.getElementById("set-sburl").value||"").trim();
+      state.settings.supabaseKey=(document.getElementById("set-sbkey").value||"").trim();
       var pinEl=document.getElementById("set-pin"); if(pinEl) state.settings.pin=(pinEl.value||"").replace(/\D/g,"").slice(0,6);
       save(); render(); toast("Settings saved","ok");
     }
