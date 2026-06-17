@@ -454,7 +454,7 @@
     MACHINES.forEach(function(m){ if(!s.machines[m.id]) s.machines[m.id]={running:null,down:null}; else if(s.machines[m.id].down===undefined) s.machines[m.id].down=null; });
     state=s;
   }
-  function save(){ store.write(JSON.stringify(state)); scheduleAutoSync(); }
+  function save(){ store.write(JSON.stringify(state)); scheduleAutoSync(); scheduleLivePush(); }
   function uid(){ try{ if(crypto&&crypto.randomUUID) return crypto.randomUUID(); }catch(e){} return "r"+Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
 
   /* ===================== helpers ===================== */
@@ -772,6 +772,23 @@
       syncing=false; store.write(JSON.stringify(state)); // keep any partial successes already marked
       if(!quiet){ render(); toast(syncErr(e),"err"); }
     });
+  }
+
+  /* ---- live state mirror: pushes a full snapshot for the read-only monitor ---- */
+  var livePushTimer=null;
+  function scheduleLivePush(){ if(syncTarget()!=="supabase") return; if(livePushTimer) clearTimeout(livePushTimer); livePushTimer=setTimeout(pushLiveState, 4000); }
+  function pushLiveState(){
+    if(syncTarget()!=="supabase") return;
+    var base=(state.settings.supabaseUrl||"").trim().replace(/\/+$/,""), key=(state.settings.supabaseKey||"").trim();
+    if(!base||!key) return;
+    var snap; try{ snap=JSON.parse(JSON.stringify(state)); }catch(e){ return; }
+    if(snap.settings){ snap.settings={ device:snap.settings.device||"", role:snap.settings.role||"", customers:snap.settings.customers||[] }; } // strip keys/pin
+    var dev=(state.settings.device||"Tablet");
+    try{
+      fetch(base+"/rest/v1/live_state?on_conflict=device",{ method:"POST",
+        headers:{ "apikey":key, "Authorization":"Bearer "+key, "Content-Type":"application/json", "Prefer":"resolution=merge-duplicates,return=minimal" },
+        body:JSON.stringify([{ device:dev, state:snap, updated_at:new Date().toISOString() }]) }).catch(function(){});
+    }catch(e){}
   }
 
   function syncSheet(opts){
@@ -1705,6 +1722,9 @@
   // Live status heartbeat: re-announce running machines so the monitor stays current.
   setInterval(postAllStatus, 60000);
   setTimeout(postAllStatus, 4000);
+  // Live-state mirror for the read-only monitor app.
+  setInterval(pushLiveState, 60000);
+  setTimeout(pushLiveState, 5000);
   if(typeof window!=="undefined"){
     window.addEventListener("online", function(){ scheduleAutoSync(1500); });
     window.addEventListener("focus", function(){ scheduleAutoSync(1500); });
