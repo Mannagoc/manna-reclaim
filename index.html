@@ -19,7 +19,7 @@
     --amber:#62b23a; --amber-soft:#8fcf66; --brand-deep:#3f8a22;
     --ember:#e0762e; --elec:#46c2d6; --steel:#9bb0c4; --pause:#e9b53a;
     --ok:#7bc86c; --warn:#e9b53a; --err:#e8604c;
-    --q-special:#46c2d6; --q-superfine:#86d36a; --q-fine:#e9b53a; --q-medium:#cf9a5e;
+    --q-special:#46c2d6; --q-superfine:#86d36a; --q-fine:#e9b53a; --q-medium:#cf9a5e; --q-drc:#b58be0;
     --sans: system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
     --mono: ui-monospace,"SF Mono","Roboto Mono",Menlo,Consolas,monospace;
     --r:14px; --r-sm:10px;
@@ -192,7 +192,7 @@
   .qchip{ font-size:11px; font-weight:700; letter-spacing:.06em; padding:3px 9px; border-radius:6px;
     text-transform:uppercase; color:#13110b; }
   .q-Special{ background:var(--q-special); } .q-SuperFine{ background:var(--q-superfine); }
-  .q-Fine{ background:var(--q-fine); } .q-Medium{ background:var(--q-medium); }
+  .q-Fine{ background:var(--q-fine); } .q-Medium{ background:var(--q-medium); } .q-DRC{ background:var(--q-drc); }
   .qchip.shift{ background:var(--steel); }
   .formchip{ font-size:11px; color:var(--ink-dim); border:1px solid var(--line); padding:3px 8px; border-radius:6px; font-family:var(--mono); }
 
@@ -408,15 +408,14 @@
   var TYRES={ truck:{label:"Truck tyre", mesh:"30#", store:"truck"}, bike:{label:"Bike tyre", mesh:"20#", store:"bike"} };
   function M(id){ for(var i=0;i<MACHINES.length;i++) if(MACHINES[i].id===id) return MACHINES[i]; return null; }
   function shortName(id){ var m=M(id); return m?m.short:id; }
-  var QUALITIES=["Special","SuperFine","Fine","Medium"];
+  var QUALITIES=["Special","SuperFine","Fine","Medium","DRC"];
   var SUPERVISORS=["Mathai","Rahul","Devanand"];
 
   // Formulations already defined in the costing workbook (Special line).
   // 2500-capacity autoclave (A) -> the 2500 specs; 2200 autoclaves (M/N/O) -> the 2200 spec.
   var FORMULATIONS=[
     {name:"Special 2200",     capacity:2200},
-    {name:"Special 2500",     capacity:2500},
-    {name:"Special 2500 Pro", capacity:2500}
+    {name:"Special 2500",     capacity:2500}
   ];
   function formulationsFor(cap){ return FORMULATIONS.filter(function(f){ return f.capacity===cap; }); }
   var COARSE_FORMS=[ {name:"Coarse 2200",capacity:2200,wt:2280}, {name:"Coarse 2500",capacity:2500,wt:2585} ];
@@ -436,7 +435,7 @@
 
   /* ===================== state ===================== */
   var state;
-  function blank(){ return { v:1, settings:{syncUrl:"",supabaseUrl:"",supabaseKey:"",device:"",role:"manager",pin:"",customers:[]}, seq:{batch:0}, crumb:{truck:0,bike:0}, batches:[], runs:[], dispatches:[], maintenance:[], bearingLogs:[], conversions:[], shift:{date:todayISO(),name:autoShift(),supervisor:""}, machines:{} }; }
+  function blank(){ return { v:1, settings:{syncUrl:"",supabaseUrl:"",supabaseKey:"",device:"",role:"manager",pin:"",customers:[]}, seq:{batch:0}, crumb:{truck:0,bike:0}, leftout:{}, batches:[], runs:[], dispatches:[], maintenance:[], bearingLogs:[], conversions:[], shift:{date:todayISO(),name:autoShift(),supervisor:""}, machines:{} }; }
   function todayISO(){ var d=new Date(),m=d.getMonth()+1,day=d.getDate(); return d.getFullYear()+"-"+(m<10?"0":"")+m+"-"+(day<10?"0":"")+day; }
   function autoShift(){ var h=new Date().getHours(); return (h>=6&&h<18)?"Day":"Night"; }
   function curShift(){ if(!state.shift) state.shift={date:todayISO(),name:autoShift()}; return state.shift; }
@@ -479,6 +478,7 @@
     if(!s.maintenance) s.maintenance=[];
     if(!s.bearingLogs) s.bearingLogs=[];
     if(!s.conversions) s.conversions=[];
+    if(!s.leftout) s.leftout={};
     if(!s.shift) s.shift={date:todayISO(),name:autoShift(),supervisor:""};
     if(s.shift.supervisor==null) s.shift.supervisor="";
     if(!s.crumb) s.crumb={truck:0,bike:0};
@@ -556,7 +556,7 @@
   function qchip(q){ return q ? '<span class="qchip q-'+esc(q)+'">'+esc(q)+'</span>' : ''; }
 
   /* ===================== actions ===================== */
-  function startAutoclave(mid, batchNo, formulationName, paired){
+  function startAutoclave(mid, batchNo, formulationName, paired, hourStart){
     var m=M(mid); batchNo=(batchNo||"").trim();
     if(!batchNo){ toast("Enter a batch number","warn"); return; }
     if(state.batches.some(function(b){ return String(b.no).toLowerCase()===batchNo.toLowerCase(); })){ toast("Batch "+batchNo+" already exists","warn"); return; }
@@ -565,26 +565,26 @@
     var b={ id:uid(), no:batchNo, capacity:m.capacity, formulation:formulationName,
             autoclaveId:m.id, paired:!!paired, startedAt:Date.now(), autoclaveDone:false, qualities:[] };
     state.batches.push(b);
-    state.machines[mid].running={ batchId:b.id, quality:"", segStart:Date.now(), accumMs:0, paused:false };
+    state.machines[mid].running={ batchId:b.id, quality:"", hourStart:(hourStart==null?"":hourStart), segStart:Date.now(), accumMs:0, paused:false };
     save(); closeSheet(); render(); toast("Loaded "+batchNo+" on "+m.name,"ok");
     postStatus(mid,"running");
   }
-  function startRefiner(mid, batchId, quality, sourceBatches, elecStart){
-    state.machines[mid].running={ batchId:batchId, quality:quality||"", sourceBatches:sourceBatches||[], elecStart:(elecStart==null?"":elecStart), segStart:Date.now(), accumMs:0, paused:false };
+  function startRefiner(mid, batchId, quality, sourceBatches, elecStart, hourStart){
+    state.machines[mid].running={ batchId:batchId, quality:quality||"", sourceBatches:sourceBatches||[], elecStart:(elecStart==null?"":elecStart), hourStart:(hourStart==null?"":hourStart), segStart:Date.now(), accumMs:0, paused:false };
     save(); closeSheet(); render();
     var b=batch(batchId); toast(M(mid).name+" started · "+b.no+(quality?" · "+quality:""),"ok");
     postStatus(mid,"running");
   }
-  function startShiftMachine(mid, shift, shiftDate, tyreType, elecStart){
+  function startShiftMachine(mid, shift, shiftDate, tyreType, elecStart, hourStart){
     var m=M(mid);
-    state.machines[mid].running={ shiftwise:true, line:(m.kind==="grind"?"grind":"coarse"), tyreType:tyreType||"", shift:shift, shiftDate:shiftDate, elecStart:(elecStart==null?"":elecStart), segStart:Date.now(), accumMs:0, paused:false };
+    state.machines[mid].running={ shiftwise:true, line:(m.kind==="grind"?"grind":"coarse"), tyreType:tyreType||"", shift:shift, shiftDate:shiftDate, elecStart:(elecStart==null?"":elecStart), hourStart:(hourStart==null?"":hourStart), segStart:Date.now(), accumMs:0, paused:false };
     save(); closeSheet(); render(); toast(m.short+" started · "+shift+(tyreType?" · "+TYRES[tyreType].label:""),"ok");
     postStatus(mid,"running");
   }
-  function startAutoclaveCoarse(mid, formName, cap, shift, shiftDate){
+  function startAutoclaveCoarse(mid, formName, cap, shift, shiftDate, hourStart){
     var m=M(mid);
     takeCrumb("bike", cap);
-    state.machines[mid].running={ shiftwise:true, line:"coarse", formulation:formName, capacity:cap, shift:shift, shiftDate:shiftDate, segStart:Date.now(), accumMs:0, paused:false };
+    state.machines[mid].running={ shiftwise:true, line:"coarse", formulation:formName, capacity:cap, shift:shift, shiftDate:shiftDate, hourStart:(hourStart==null?"":hourStart), segStart:Date.now(), accumMs:0, paused:false };
     save(); closeSheet(); render(); toast(m.name+" loaded · coarse "+shift,"ok");
     postStatus(mid,"running");
   }
@@ -630,7 +630,10 @@
   function commitRun(mid, fields){
     var m=M(mid), run=state.machines[mid].running; if(!run) return;
     var end=Date.now();
-    var runtimeMin=Math.round((elapsedOf(run)/60000)*100)/100;
+    var hStart=(fields.hourStart===""||fields.hourStart==null)?null:parseFloat(fields.hourStart);
+    var hEnd=(fields.hourEnd===""||fields.hourEnd==null)?null:parseFloat(fields.hourEnd);
+    var hrs=(hStart!=null && hEnd!=null)?Math.max(0,Math.round((hEnd-hStart)*100)/100):0;
+    var runtimeMin=Math.round(hrs*60*100)/100;
 
     if(run.shiftwise){
       // Shiftwise run (coarse or grind) -> accumulate by machine + shift date + shift
@@ -644,6 +647,8 @@
         cex.passes=(cex.passes||1)+1; cex.end=end; cex.synced=false;
         if(fields.elecEnd!=null) cex.elecEnd=fields.elecEnd;
         if((cex.elecStart==null||cex.elecStart==="")&&fields.elecStart!=null) cex.elecStart=fields.elecStart;
+        if(hEnd!=null) cex.hourEnd=hEnd;
+        if((cex.hourStart==null||cex.hourStart==="")&&hStart!=null) cex.hourStart=hStart;
         if(run.weighEntries&&run.weighEntries.length){ cex.weighEntries=(cex.weighEntries||[]).concat(run.weighEntries); cex.needsWeigh=true; }
         if(run.formulation && !cex.formulation) cex.formulation=run.formulation;
         if(run.tyreType) cex.tyreType=run.tyreType;
@@ -655,6 +660,7 @@
           batchId:"", batchNo:"", autoclaveId:"", paired:false, quality:"", passes:1,
           start:run.segStart||end, end:end, runtimeMin:runtimeMin, hoursRun:Math.round((runtimeMin/60)*100)/100,
           kWh:fields.kWh==null?"":fields.kWh, elecStart:fields.elecStart==null?"":fields.elecStart, elecEnd:fields.elecEnd==null?"":fields.elecEnd,
+          hourStart:hStart==null?"":hStart, hourEnd:hEnd==null?"":hEnd,
           firewoodKg:fields.firewoodKg==null?"":fields.firewoodKg, workers:fields.workers==null?"":fields.workers,
           weightKg:"", weighEntries:(m.outWeight?(run.weighEntries||[]):undefined), needsWeigh:!!m.outWeight,
           synced:false, createdAt:end
@@ -683,6 +689,8 @@
       existing.end=end; existing.synced=false;
       if(fields.elecEnd!=null) existing.elecEnd=fields.elecEnd;
       if((existing.elecStart==null||existing.elecStart==="")&&fields.elecStart!=null) existing.elecStart=fields.elecStart;
+      if(hEnd!=null) existing.hourEnd=hEnd;
+      if((existing.hourStart==null||existing.hourStart==="")&&hStart!=null) existing.hourStart=hStart;
       existing.src1=sv.src1; existing.src2=sv.src2; existing.src3=sv.src3; existing.src4=sv.src4;
       if(fields.weightKg!=null && (existing.weightKg===""||existing.weightKg==null)) existing.weightKg=fields.weightKg;
       state.machines[mid].running=null; postStatus(mid,"idle");
@@ -700,6 +708,7 @@
       hoursRun:Math.round((runtimeMin/60)*100)/100,
       src1:sv.src1, src2:sv.src2, src3:sv.src3, src4:sv.src4,
       kWh:fields.kWh==null?"":fields.kWh, elecStart:fields.elecStart==null?"":fields.elecStart, elecEnd:fields.elecEnd==null?"":fields.elecEnd, firewoodKg:fields.firewoodKg==null?"":fields.firewoodKg,
+      hourStart:hStart==null?"":hStart, hourEnd:hEnd==null?"":hEnd,
       workers:fields.workers==null?"":fields.workers,
       weightKg:fields.weightKg==null?"":fields.weightKg, weighEntries:[], needsWeigh:!!m.weigh,
       synced:false, createdAt:end
@@ -843,7 +852,9 @@
     passes:sbN(r.passes), started_at:sbISO(r.start), ended_at:sbISO(r.end),
     runtime_min:sbN(r.runtimeMin), hours_run:sbN(r.hoursRun), kwh:sbN(r.kWh), firewood_kg:sbN(r.firewoodKg),
     elec_start:sbN(r.elecStart), elec_end:sbN(r.elecEnd), supervisor:sbN(r.supervisor),
+    hour_start:sbN(r.hourStart), hour_end:sbN(r.hourEnd),
     conv_out_kg:sbN(r.convOutKg), conv_in_kg:sbN(r.convInKg),
+    leftout_in:sbN(r.leftoutIn), leftout_out:sbN(r.leftoutOut),
     workers:sbN(r.workers), weight_kg:sbN(r.weightKg),
     src1:sbN(r.src1), src2:sbN(r.src2), src3:sbN(r.src3), src4:sbN(r.src4) }; }
   function dispToSb(d){ return {
@@ -1254,13 +1265,16 @@
   }
 
   /* ===================== dispatch ===================== */
-  var SACK_KG=50, PACK_TOL=40;
+  var SACK_KG=50;
   function customer(code){ var cs=state.settings.customers||[]; for(var i=0;i<cs.length;i++) if(cs[i].code===code) return cs[i]; return null; }
   function weighedRuns(){ return state.runs.filter(function(r){ return r.machineId==="R4" && r.quality && r.weightKg!==""&&r.weightKg!=null && parseFloat(r.weightKg)>0; }); }
   function packedSacksOf(r){ return parseFloat(r.packedSacks)||0; }
   function packedKgOf(r){ return packedSacksOf(r)*SACK_KG; }
-  function fullyPacked(r){ return packedKgOf(r) >= (parseFloat(r.weightKg)||0) - PACK_TOL; }
-  function sacksNeeded(r){ var w=parseFloat(r.weightKg)||0; return Math.max(0, Math.ceil((w-PACK_TOL)/SACK_KG)); }
+  function leftoutBal(q){ return Math.round((((state.leftout&&state.leftout[q])||0))*100)/100; }
+  function carriedIn(r){ return r.leftoutIn!=null ? (parseFloat(r.leftoutIn)||0) : leftoutBal(r.quality); }   // prospective until finalised
+  function packTotalOf(r){ return Math.round(((parseFloat(r.weightKg)||0)+carriedIn(r))*100)/100; }
+  function fullyPacked(r){ if(r.packedSacks==null) return false; return (packTotalOf(r) - packedKgOf(r)) < SACK_KG; }
+  function sacksNeeded(r){ return Math.max(0, Math.floor(packTotalOf(r)/SACK_KG)); }
   function dispatchedSacksFor(batchId,quality){ var t=0; (state.dispatches||[]).forEach(function(d){ if(d.batchId===batchId && (d.quality||"")===(quality||"")) t+=parseFloat(d.sacks)||0; }); return t; }
   function availSacksOf(r){ return packedSacksOf(r) - dispatchedSacksFor(r.batchId, r.quality); }
   function pendingPack(){ return weighedRuns().filter(function(r){ return !fullyPacked(r); }); }
@@ -1275,9 +1289,9 @@
       empty('<path d="M21 8 12 3 3 8v8l9 5 9-5Z"/><path d="M3 8l9 5 9-5"/><path d="M12 13v8"/>',
         "Nothing to pack","Weigh a quality on R4 and it lands here to be packed into sacks.");
     var cards=p.slice().reverse().map(function(r){
-      var b=batch(r.batchId); var w=parseFloat(r.weightKg)||0, ps=packedSacksOf(r), pk=ps*SACK_KG, rem=Math.max(0,w-pk), need=sacksNeeded(r);
-      var prog = ps>0 ? '<small style="color:var(--elec)">'+ps+' sacks packed · '+pk+' kg · '+rem+' kg left</small>'
-                      : '<small>weighed '+w+' kg · ≈ '+need+' sacks ('+SACK_KG+' kg each)</small>';
+      var b=batch(r.batchId); var w=parseFloat(r.weightKg)||0, ci=carriedIn(r), total=packTotalOf(r), ps=packedSacksOf(r), need=sacksNeeded(r);
+      var prog = ps>0 ? '<small style="color:var(--elec)">'+ps+' sacks packed · '+Math.round((total-ps*SACK_KG)*100)/100+' kg left out</small>'
+                      : '<small>weighed '+w+' kg'+(ci>0?' + '+ci+' carried = '+total+' kg':'')+' · ≈ '+need+' sacks</small>';
       return '<div class="wcard"><div class="info"><div class="row1"><span class="batchref">'+esc(b?b.no:'?')+'</span>'+qchip(r.quality)+'<span class="formchip">'+esc(b?b.formulation:'')+'</span></div>'+prog+'</div>'+
         '<button class="btn primary" data-pack="'+r.id+'">'+(ps>0?'Update ▸':'Pack ▸')+'</button></div>';
     }).join("");
@@ -1285,27 +1299,39 @@
   }
   function openPackSheet(runId){
     var r=weighRow(runId); if(!r) return; var b=batch(r.batchId);
-    var w=parseFloat(r.weightKg)||0, ps=packedSacksOf(r), need=sacksNeeded(r);
+    var w=parseFloat(r.weightKg)||0, ci=carriedIn(r), total=packTotalOf(r), ps=packedSacksOf(r), need=sacksNeeded(r);
+    var carryNote = ci>0 ? '<div class="ro" style="margin-bottom:10px"><span class="k">Carried in from last batch</span><span class="v" style="color:var(--elec)">+'+ci+' kg</span></div>' : '';
+    var willLeave = Math.round((total - need*SACK_KG)*100)/100;
     var isSpecial = r.quality==="Special";
     var convBox = isSpecial ? '<div class="sheet-label" style="margin-top:16px">Convert Special → SuperFine</div>'+
       '<div class="field-inline" style="align-items:stretch"><div class="field" style="flex:2;margin-bottom:0"><div class="num-suffix"><input id="pk-conv" type="number" inputmode="decimal" placeholder="0"><span class="sfx">kg</span></div></div>'+
       '<button class="btn" id="pk-conv-go" style="flex:1;border-color:#7a5a1f;color:var(--amber)">→ SuperFine</button></div>'+
       '<div class="hint" style="margin-top:-4px">Moves this many kg — and its processing cost — to SuperFine of '+esc(b?b.no:'')+'. The Special weight here drops by the same amount.</div>' : '';
     openSheet('<div class="sheet-h"><span class="led" style="background:var(--elec)"></span><b>Pack '+esc(b?b.no:'')+' · '+esc(r.quality)+'</b></div>'+
-      '<div class="sheet-sub">Weighed '+w+' kg · about '+need+' sacks of '+SACK_KG+' kg. It clears packing once you\'re within '+PACK_TOL+' kg.</div>'+
-      '<div class="field"><label>Sacks packed (total so far)</label><input id="pk-s" type="number" inputmode="numeric" value="'+(ps||"")+'" placeholder="'+need+'"></div>'+
+      '<div class="sheet-sub">Weighed '+w+' kg'+(ci>0?' + '+ci+' kg carried = '+total+' kg':'')+' · '+SACK_KG+' kg per sack.</div>'+
+      carryNote+
+      '<div class="ro" style="margin-bottom:10px"><span class="k">Full sacks</span><span class="v">'+need+' sacks · '+(need*SACK_KG)+' kg</span></div>'+
+      '<div class="ro" style="margin-bottom:14px"><span class="k">Left out → next '+esc(r.quality)+' batch</span><span class="v" style="color:var(--amber)">'+willLeave+' kg</span></div>'+
+      '<div class="field"><label>Sacks packed</label><input id="pk-s" type="number" inputmode="numeric" value="'+(ps||need||"")+'" placeholder="'+need+'"></div>'+
       convBox+
       '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button>'+
-      '<button class="btn primary" id="pk-go">Save</button></div>');
+      '<button class="btn primary" id="pk-go">Pack &amp; carry forward</button></div>');
     sheet.querySelector("#pk-go").addEventListener("click",function(){ setPacked(runId, num(sheet.querySelector("#pk-s").value)); });
     if(isSpecial){ var cg=sheet.querySelector("#pk-conv-go"); if(cg) cg.addEventListener("click",function(){ convertAtPack(runId, num(sheet.querySelector("#pk-conv").value)); }); }
   }
   function setPacked(runId, sacks){
-    var r=weighRow(runId); if(!r) return; var b=batch(r.batchId);
+    var r=weighRow(runId); if(!r) return; var b=batch(r.batchId); var q=r.quality||"";
     if(sacks==null||sacks<0){ toast("Enter the sacks packed","warn"); return; }
-    r.packedSacks=sacks; r.synced=false; save(); closeSheet(); render();
-    if(fullyPacked(r)) toast(b.no+" · "+r.quality+" fully packed — ready to dispatch","ok");
-    else toast("Saved "+sacks+" sacks","ok");
+    if(r.leftoutIn==null) r.leftoutIn=leftoutBal(q);     // claim the carried-in remainder once
+    var total=Math.round(((parseFloat(r.weightKg)||0)+(parseFloat(r.leftoutIn)||0))*100)/100;
+    var leftoutOut=Math.round((total - sacks*SACK_KG)*100)/100;
+    if(leftoutOut<0){ toast("That is more than the "+total+" kg available","warn"); return; }
+    r.packedSacks=sacks; r.leftoutOut=leftoutOut; r.synced=false;
+    if(!state.leftout) state.leftout={};
+    state.leftout[q]=leftoutOut;                          // carry to the next batch of this quality
+    save(); closeSheet(); render();
+    if(fullyPacked(r)) toast(b.no+" · "+q+" packed · "+leftoutOut+" kg carried forward","ok");
+    else toast("Saved "+sacks+" sacks · "+leftoutOut+" kg still to pack","ok");
   }
 
   function viewDispatch(){
@@ -1564,6 +1590,7 @@
       '<div class="sheet-label">Shift</div><div class="pickgrid">'+shiftBtns+'</div>'+
       tyreBlock+
       '<div class="field"><label>Initial electricity reading <span class="muted" style="text-transform:none;letter-spacing:0">— meter units now</span></label><div class="num-suffix"><input id="ss-elec" type="number" inputmode="decimal" placeholder="meter reading"><span class="sfx">units</span></div></div>'+
+      '<div class="field"><label>Hour-meter reading at start</label><div class="num-suffix"><input id="ss-hour" type="number" inputmode="decimal" placeholder="hour meter now"><span class="sfx">hrs</span></div></div>'+
       '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button>'+
       '<button class="btn primary" id="ss-go">Start ▸</button></div>');
     sheet.querySelectorAll("[data-pick-shift]").forEach(function(el){
@@ -1576,7 +1603,7 @@
     });
     sheet.querySelector("#ss-go").addEventListener("click",function(){
       var dt=sheet.querySelector("#ss-date").value; if(!dt){ toast("Pick a date","warn"); return; }
-      startShiftMachine(mid, picks.shift, dt, picks.tyre, num(sheet.querySelector("#ss-elec").value));
+      startShiftMachine(mid, picks.shift, dt, picks.tyre, num(sheet.querySelector("#ss-elec").value), num(sheet.querySelector("#ss-hour").value));
     });
   }
 
@@ -1606,6 +1633,7 @@
         '<div class="field" style="margin-bottom:0"><input id="ac-date" type="date" value="'+d.date+'"></div>'+
         '<div class="pickgrid" style="margin-top:9px">'+shiftBtns+'</div></div>'+
       '<div id="ac-crumb" class="ro" style="margin-top:16px"></div>'+
+      '<div class="field" style="margin-top:14px"><label>Hour-meter reading at load</label><div class="num-suffix"><input id="ac-hour" type="number" inputmode="decimal" placeholder="hour meter now"><span class="sfx">hrs</span></div></div>'+
       '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button>'+
       '<button class="btn primary" id="ac-go">Load ▸</button></div>');
     function sel(group,one){ group.forEach(function(g){ g.classList.remove("sel"); }); one.classList.add("sel"); }
@@ -1639,9 +1667,9 @@
       if(!picks.form){ toast("Pick a formulation","warn"); return; }
       if(picks.type==="coarse"){
         var dt=sheet.querySelector("#ac-date").value; if(!dt){ toast("Pick a date","warn"); return; }
-        startAutoclaveCoarse(mid, picks.form, m.capacity, picks.shift, dt);
+        startAutoclaveCoarse(mid, picks.form, m.capacity, picks.shift, dt, num(sheet.querySelector("#ac-hour").value));
       } else {
-        startAutoclave(mid, sheet.querySelector("#ac-batch").value, picks.form, picks.paired);
+        startAutoclave(mid, sheet.querySelector("#ac-batch").value, picks.form, picks.paired, num(sheet.querySelector("#ac-hour").value));
       }
     });
     refreshCrumb();
@@ -1667,6 +1695,7 @@
       '<div class="sheet-label">Batch</div><div class="pickgrid">'+batchBtns+'</div>'+qBtns+
       '<div id="mixbox" style="display:none"><div class="sheet-label" style="margin-top:14px">Mixed from <span class="muted" style="text-transform:none;letter-spacing:0">— add tailings of other batches</span></div><div class="pickgrid" id="mixgrid"></div></div>'+
       '<div class="field"><label>Initial electricity reading <span class="muted" style="text-transform:none;letter-spacing:0">— meter units now</span></label><div class="num-suffix"><input id="rf-elec" type="number" inputmode="decimal" placeholder="meter reading"><span class="sfx">units</span></div></div>'+
+      '<div class="field"><label>Hour-meter reading at start</label><div class="num-suffix"><input id="rf-hour" type="number" inputmode="decimal" placeholder="hour meter now"><span class="sfx">hrs</span></div></div>'+
       '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button>'+
       '<button class="btn primary" id="start-go" disabled>Start ▸</button></div>');
     // wire selection
@@ -1705,7 +1734,7 @@
       if(picks.quality==="Medium") src=[primNo].concat(extraNos);
       else if(picks.quality==="Fine" && extraNos.length) src=[primNo].concat(extraNos);
       src=src.filter(function(v,i){ return v && src.indexOf(v)===i; }).slice(0,4);
-      startRefiner(mid,picks.batchId,picks.quality,src,num(sheet.querySelector("#rf-elec").value)); });
+      startRefiner(mid,picks.batchId,picks.quality,src,num(sheet.querySelector("#rf-elec").value),num(sheet.querySelector("#rf-hour").value)); });
     function checkGo(){ go.disabled=!(picks.batchId && (!m.needsQuality || picks.quality)); }
     function sel(group,one){ group.forEach(function(g){ g.classList.remove("sel"); }); one.classList.add("sel"); }
   }
@@ -1731,24 +1760,27 @@
       fields+='<div class="field"><label>Output weight <span class="muted" style="text-transform:none;letter-spacing:0">— optional, or weigh later</span></label>'+
         '<div class="num-suffix"><input id="f-wt" type="number" inputmode="decimal" placeholder="leave blank to weigh later"><span class="sfx">kg</span></div></div>';
     }
+    var hs=(run.hourStart===""||run.hourStart==null)?null:run.hourStart;
+    var hourField='<div class="field"><label>Hour-meter reading at stop'+(hs!=null?' <span class="muted" style="text-transform:none;letter-spacing:0">— started at '+hs+'</span>':'')+'</label><div class="num-suffix"><input id="f-hour" type="number" inputmode="decimal" placeholder="hour meter now"><span class="sfx">hrs</span></div></div>';
     var title=m.kind==="autoclave"?(sw?"Unload Autoclave · Coarse":"Unload Autoclave"):"Stop "+m.name;
     var subline = sw
       ? '<span class="qchip shift" style="background:'+(run.line==="grind"?"var(--steel);color:#0e1a08":"var(--ember)")+'">'+esc(run.shift)+'</span> '+esc(fmtDay(run.shiftDate))+(run.formulation?' · '+esc(run.formulation):'')+(run.tyreType?' · '+esc(TYRES[run.tyreType].label)+' '+esc(TYRES[run.tyreType].mesh):'')
       : '<span class="batchref">'+esc(b?b.no:'?')+'</span> · '+esc(b?b.formulation:'')+(run.quality?' · '+esc(run.quality):'')+(run.sourceBatches&&run.sourceBatches.length>1?' · <span class="muted" style="text-transform:none;letter-spacing:0">mix '+esc(run.sourceBatches.join(" + "))+'</span>':'');
     openSheet('<div class="sheet-h"><span class="led" style="background:radial-gradient(circle at 35% 30%,#c8f0a0,var(--amber));box-shadow:0 0 10px 1px var(--amber)"></span><b>'+title+'</b></div>'+
       '<div class="sheet-sub">'+subline+'</div>'+
-      live+'<div style="height:14px"></div>'+fields+
+      fields+hourField+
       (sw&&m.outWeight?'<div class="hint" style="margin-top:-4px">Output is weighed shiftwise in the Weigh tab after stopping'+(m.crumb?' — it adds to crumb stock.':'.')+'</div>':'')+
       '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button>'+
       '<button class="btn primary" id="off-go">'+(m.kind==="autoclave"?"Log & unload":"Log run")+'</button></div>');
     sheet.querySelector("#off-go").addEventListener("click",function(){
       var f={};
-      var elec=sheet.querySelector("#f-elec"), fw=sheet.querySelector("#f-fw"), wk=sheet.querySelector("#f-work"), wt=sheet.querySelector("#f-wt");
+      var elec=sheet.querySelector("#f-elec"), fw=sheet.querySelector("#f-fw"), wk=sheet.querySelector("#f-work"), wt=sheet.querySelector("#f-wt"), hr=sheet.querySelector("#f-hour");
       if(elec){
         var fin=num(elec.value), es=(run.elecStart===""||run.elecStart==null)?null:run.elecStart;
         f.elecEnd=fin; f.elecStart=es;
         if(fin!=null && es!=null) f.kWh=Math.max(0, Math.round((fin-es)*100)/100);
       }
+      f.hourStart=hs; if(hr) f.hourEnd=num(hr.value);
       if(fw) f.firewoodKg=num(fw.value);
       f.workers=wk?num(wk.value):null; if(wt) f.weightKg=num(wt.value);
       commitRun(mid,f);
