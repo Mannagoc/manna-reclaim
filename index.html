@@ -141,6 +141,13 @@
   .wbtn{ flex:none; width:30px; height:30px; border-radius:8px; border:1px solid var(--line); background:#1a1f12; color:var(--ink-dim); display:grid; place-items:center; margin-left:6px; cursor:pointer; padding:0; }
   .wbtn svg{ width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
   .wbtn:active{ transform:scale(.94); }
+  .tbtn{ flex:none; width:30px; height:30px; border-radius:8px; border:1px solid var(--line); background:#11201f; color:var(--elec); display:grid; place-items:center; margin-left:6px; cursor:pointer; padding:0; }
+  .tbtn svg{ width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+  .tbtn:active{ transform:scale(.94); }
+  .tbtn.due{ border-color:#7a5a1f; background:#2a2310; color:var(--amber); animation:tpulse 1.6s ease-in-out infinite; }
+  @keyframes tpulse{ 0%,100%{ box-shadow:0 0 0 0 rgba(244,165,42,.0);} 50%{ box-shadow:0 0 10px 1px rgba(244,165,42,.55);} }
+  .duebar{ background:#2a2310; border:1px solid #7a5a1f; color:var(--amber); border-radius:11px; padding:10px 13px; margin-bottom:12px; font-size:12.5px; font-weight:600; cursor:pointer; }
+  .duebar:active{ transform:scale(.995); }
   .shiftchip{ display:inline-flex; align-items:center; gap:5px; background:#141a20; border:1px solid #3f4a55; color:var(--ink-dim);
     padding:5px 11px; border-radius:999px; font-size:12px; cursor:pointer; }
   .shiftchip b{ color:var(--ink); }
@@ -270,9 +277,10 @@
   /* settings */
   .field{ margin-bottom:14px; }
   .field label{ display:block; font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--ink-dim); margin-bottom:7px; font-weight:700; }
-  .field input{ width:100%; background:#161310; border:1px solid var(--line2); border-radius:var(--r-sm);
+  .field input,.field select{ width:100%; background:#161310; border:1px solid var(--line2); border-radius:var(--r-sm);
     color:var(--ink); padding:13px 13px; font-size:15px; }
-  .field input:focus{ outline:none; border-color:var(--amber); box-shadow:0 0 0 3px #f4a52a22; }
+  .field select{ -webkit-appearance:none; appearance:none; background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a89c8a' stroke-width='3'><path d='M6 9l6 6 6-6'/></svg>"); background-repeat:no-repeat; background-position:right 13px center; padding-right:34px; }
+  .field input:focus,.field select:focus{ outline:none; border-color:var(--amber); box-shadow:0 0 0 3px #f4a52a22; }
   .field .hint{ font-size:11.5px; color:var(--ink-faint); margin-top:6px; }
   .syncrow{ display:flex; gap:9px; }
   .syncrow .btn{ flex:1 1 auto; }
@@ -383,8 +391,8 @@
   /* ===================== domain ===================== */
   var MACHINES=[
     {id:"CRK",  name:"Cracker",              short:"CRK",     kind:"grind", accent:"var(--steel)", tyre:true, outWeight:false, crumb:false, defTyre:"truck", sub:"shiftwise · tyre prep",   group:"Grinding line"},
-    {id:"GRD_K",name:"Keelachandra Grinder", short:"K.Grind", kind:"grind", accent:"var(--steel)", tyre:true, outWeight:true,  crumb:true,  defTyre:"truck", sub:"shiftwise · 30# default", group:"Grinding line"},
-    {id:"GRD_S",name:"Santhosh Grinder",     short:"S.Grind", kind:"grind", accent:"var(--steel)", tyre:true, outWeight:true,  crumb:true,  defTyre:"bike",  sub:"shiftwise · 20# default", group:"Grinding line"},
+    {id:"GRD_K",name:"Grinder 1", short:"Grind 1", kind:"grind", accent:"var(--steel)", tyre:true, outWeight:true,  crumb:true,  defTyre:"truck", sub:"shiftwise · 30# default", group:"Grinding line"},
+    {id:"GRD_S",name:"Grinder 2", short:"Grind 2", kind:"grind", accent:"var(--steel)", tyre:true, outWeight:true,  crumb:true,  defTyre:"bike",  sub:"shiftwise · 20# default", group:"Grinding line"},
     {id:"GRD_O",name:"Soorya Grinder",       short:"Soorya",  kind:"grind", accent:"var(--steel)", tyre:true, outWeight:true,  crumb:true,  defTyre:"truck", sub:"shiftwise",             group:"Grinding line"},
     {id:"AC_A",name:"Autoclave A",  short:"AC-A", kind:"autoclave", capacity:2500, accent:"var(--ember)", needsQuality:false, weigh:false, group:"Autoclaves"},
     {id:"AC_M",name:"Autoclave M",  short:"AC-M", kind:"autoclave", capacity:2200, accent:"var(--ember)", needsQuality:false, weigh:false, group:"Autoclaves"},
@@ -401,6 +409,7 @@
   function M(id){ for(var i=0;i<MACHINES.length;i++) if(MACHINES[i].id===id) return MACHINES[i]; return null; }
   function shortName(id){ var m=M(id); return m?m.short:id; }
   var QUALITIES=["Special","SuperFine","Fine","Medium"];
+  var SUPERVISORS=["Mathai","Rahul","Devanand"];
 
   // Formulations already defined in the costing workbook (Special line).
   // 2500-capacity autoclave (A) -> the 2500 specs; 2200 autoclaves (M/N/O) -> the 2200 spec.
@@ -427,11 +436,38 @@
 
   /* ===================== state ===================== */
   var state;
-  function blank(){ return { v:1, settings:{syncUrl:"",supabaseUrl:"",supabaseKey:"",device:"",role:"manager",pin:"",customers:[]}, seq:{batch:0}, crumb:{truck:0,bike:0}, batches:[], runs:[], dispatches:[], maintenance:[], shift:{date:todayISO(),name:autoShift()}, machines:{} }; }
+  function blank(){ return { v:1, settings:{syncUrl:"",supabaseUrl:"",supabaseKey:"",device:"",role:"manager",pin:"",customers:[]}, seq:{batch:0}, crumb:{truck:0,bike:0}, batches:[], runs:[], dispatches:[], maintenance:[], bearingLogs:[], conversions:[], shift:{date:todayISO(),name:autoShift(),supervisor:""}, machines:{} }; }
   function todayISO(){ var d=new Date(),m=d.getMonth()+1,day=d.getDate(); return d.getFullYear()+"-"+(m<10?"0":"")+m+"-"+(day<10?"0":"")+day; }
   function autoShift(){ var h=new Date().getHours(); return (h>=6&&h<18)?"Day":"Night"; }
   function curShift(){ if(!state.shift) state.shift={date:todayISO(),name:autoShift()}; return state.shift; }
-  function setShift(name,date){ state.shift={name:name,date:date||todayISO()}; save(); render(); }
+  function setShift(name,date,supervisor){ var c=curShift(); state.shift={ name:name||c.name, date:date||todayISO(), supervisor:(supervisor!=null?supervisor:c.supervisor)||"" }; save(); render(); pushShift(); }
+  function autoShiftNow(){ return { date:todayISO(), name:autoShift() }; }
+  function refreshAutoShift(){ var a=autoShiftNow(), c=curShift(); if(c.name!==a.name || c.date!==a.date){ state.shift={ name:a.name, date:a.date, supervisor:c.supervisor||"" }; } }
+  function pushShift(){
+    if(syncTarget()!=="supabase") return;
+    var c=curShift(); if(!c.supervisor) return;
+    var base=(state.settings.supabaseUrl||"").trim().replace(/\/+$/,""), key=(state.settings.supabaseKey||"").trim(); if(!base||!key) return;
+    try{ fetch(base+"/rest/v1/shifts?on_conflict=id",{ method:"POST",
+      headers:{ "apikey":key, "Authorization":"Bearer "+key, "Content-Type":"application/json", "Prefer":"resolution=merge-duplicates,return=minimal" },
+      body:JSON.stringify([{ id:c.date+"|"+c.name, shift_date:c.date, shift:c.name, supervisor:c.supervisor, updated_at:new Date().toISOString() }]) }).catch(function(){}); }catch(e){}
+  }
+  /* ---- bearings / bushes (PR1, R1, R2, Grinder 1 use bushes; rest bearings) ---- */
+  function bearingSpec(m){
+    if(!m || m.kind==="autoclave") return null;
+    var bush=(m.id==="PR1"||m.id==="R1"||m.id==="R2"||m.id==="GRD_K");
+    var intervalH=(m.kind==="grind")?1:3;   // cracker + grinders hourly; refiners every 3h
+    return { type:bush?"bush":"bearing", intervalH:intervalH, positions:["1","2","3","4"] };
+  }
+  function lastBearingLog(mid){ var t=null; (state.bearingLogs||[]).forEach(function(x){ if(x.machineId===mid){ var ts=+new Date(x.ts); if(t==null||ts>t) t=ts; } }); return t; }
+  function runStartMs(mid){ var st=state.machines[mid]; if(!st||!st.running) return null; return Date.now()-elapsedOf(st.running); }
+  function bearingDue(m){
+    var spec=bearingSpec(m); if(!spec) return false;
+    var st=state.machines[m.id]; if(!st||!st.running||st.running.paused||st.down) return false;
+    var last=lastBearingLog(m.id), ref=(last!=null)?last:runStartMs(m.id);
+    if(ref==null) return false;
+    return (Date.now()-ref) >= spec.intervalH*3600000;
+  }
+  function dueMachines(){ return MACHINES.filter(function(m){ return bearingDue(m); }); }
   function load(){
     var raw=store.read(), s;
     if(raw){ try{ s=JSON.parse(raw); }catch(e){ s=blank(); } } else s=blank();
@@ -441,7 +477,10 @@
     if(!s.settings.customers) s.settings.customers=[];
     if(!s.dispatches) s.dispatches=[];
     if(!s.maintenance) s.maintenance=[];
-    if(!s.shift) s.shift={date:todayISO(),name:autoShift()};
+    if(!s.bearingLogs) s.bearingLogs=[];
+    if(!s.conversions) s.conversions=[];
+    if(!s.shift) s.shift={date:todayISO(),name:autoShift(),supervisor:""};
+    if(s.shift.supervisor==null) s.shift.supervisor="";
     if(!s.crumb) s.crumb={truck:0,bike:0};
     if(s.settings.autoSync==null) s.settings.autoSync=true;
     if(s.settings.supabaseUrl==null) s.settings.supabaseUrl="";
@@ -481,7 +520,9 @@
   function unsynced(){ return state.runs.filter(function(r){ return !r.synced && isComplete(r); }); }
   function unsyncedDispatches(){ return (state.dispatches||[]).filter(function(d){ return !d.synced; }); }
   function unsyncedMaintenance(){ return (state.maintenance||[]).filter(function(x){ return !x.synced; }); }
-  function unsyncedCount(){ return unsynced().length + unsyncedDispatches().length + unsyncedMaintenance().length; }
+  function unsyncedBearings(){ return (state.bearingLogs||[]).filter(function(x){ return !x.synced; }); }
+  function unsyncedConversions(){ return (state.conversions||[]).filter(function(x){ return !x.synced; }); }
+  function unsyncedCount(){ return unsynced().length + unsyncedDispatches().length + unsyncedMaintenance().length + unsyncedBearings().length + unsyncedConversions().length; }
   function runningCount(){ var n=0; MACHINES.forEach(function(m){ if(state.machines[m.id].running) n++; }); return n; }
 
   function fmtElapsed(ms){ var s=Math.max(0,Math.floor(ms/1000));
@@ -520,7 +561,6 @@
     if(!batchNo){ toast("Enter a batch number","warn"); return; }
     if(state.batches.some(function(b){ return String(b.no).toLowerCase()===batchNo.toLowerCase(); })){ toast("Batch "+batchNo+" already exists","warn"); return; }
     if(!formulationName){ toast("Pick a formulation","warn"); return; }
-    if(crumbAvail("truck") < m.capacity){ toast("Not enough truck crumb ("+crumbAvail("truck")+" / "+m.capacity+" kg)","err"); return; }
     takeCrumb("truck", m.capacity);
     var b={ id:uid(), no:batchNo, capacity:m.capacity, formulation:formulationName,
             autoclaveId:m.id, paired:!!paired, startedAt:Date.now(), autoclaveDone:false, qualities:[] };
@@ -529,21 +569,20 @@
     save(); closeSheet(); render(); toast("Loaded "+batchNo+" on "+m.name,"ok");
     postStatus(mid,"running");
   }
-  function startRefiner(mid, batchId, quality, sourceBatches){
-    state.machines[mid].running={ batchId:batchId, quality:quality||"", sourceBatches:sourceBatches||[], segStart:Date.now(), accumMs:0, paused:false };
+  function startRefiner(mid, batchId, quality, sourceBatches, elecStart){
+    state.machines[mid].running={ batchId:batchId, quality:quality||"", sourceBatches:sourceBatches||[], elecStart:(elecStart==null?"":elecStart), segStart:Date.now(), accumMs:0, paused:false };
     save(); closeSheet(); render();
     var b=batch(batchId); toast(M(mid).name+" started · "+b.no+(quality?" · "+quality:""),"ok");
     postStatus(mid,"running");
   }
-  function startShiftMachine(mid, shift, shiftDate, tyreType){
+  function startShiftMachine(mid, shift, shiftDate, tyreType, elecStart){
     var m=M(mid);
-    state.machines[mid].running={ shiftwise:true, line:(m.kind==="grind"?"grind":"coarse"), tyreType:tyreType||"", shift:shift, shiftDate:shiftDate, segStart:Date.now(), accumMs:0, paused:false };
+    state.machines[mid].running={ shiftwise:true, line:(m.kind==="grind"?"grind":"coarse"), tyreType:tyreType||"", shift:shift, shiftDate:shiftDate, elecStart:(elecStart==null?"":elecStart), segStart:Date.now(), accumMs:0, paused:false };
     save(); closeSheet(); render(); toast(m.short+" started · "+shift+(tyreType?" · "+TYRES[tyreType].label:""),"ok");
     postStatus(mid,"running");
   }
   function startAutoclaveCoarse(mid, formName, cap, shift, shiftDate){
     var m=M(mid);
-    if(crumbAvail("bike") < cap){ toast("Not enough bike crumb ("+crumbAvail("bike")+" / "+cap+" kg)","err"); return; }
     takeCrumb("bike", cap);
     state.machines[mid].running={ shiftwise:true, line:"coarse", formulation:formName, capacity:cap, shift:shift, shiftDate:shiftDate, segStart:Date.now(), accumMs:0, paused:false };
     save(); closeSheet(); render(); toast(m.name+" loaded · coarse "+shift,"ok");
@@ -603,17 +642,21 @@
         cex.runtimeMin=Math.round(((parseFloat(cex.runtimeMin)||0)+runtimeMin)*100)/100;
         cex.hoursRun=Math.round((cex.runtimeMin/60)*100)/100;
         cex.passes=(cex.passes||1)+1; cex.end=end; cex.synced=false;
+        if(fields.elecEnd!=null) cex.elecEnd=fields.elecEnd;
+        if((cex.elecStart==null||cex.elecStart==="")&&fields.elecStart!=null) cex.elecStart=fields.elecStart;
+        if(run.weighEntries&&run.weighEntries.length){ cex.weighEntries=(cex.weighEntries||[]).concat(run.weighEntries); cex.needsWeigh=true; }
         if(run.formulation && !cex.formulation) cex.formulation=run.formulation;
         if(run.tyreType) cex.tyreType=run.tyreType;
       } else {
         state.runs.push({
           id:uid(), device:state.settings.device||"", machine:m.name, machineId:m.id, short:m.short, kind:m.kind, line:run.line, shiftwise:true,
-          shift:run.shift, shiftDate:run.shiftDate, formulation:run.formulation||"", capacity:run.capacity||"",
+          shift:run.shift, shiftDate:run.shiftDate, supervisor:curShift().supervisor||"", formulation:run.formulation||"", capacity:run.capacity||"",
           tyreType:run.tyreType||"", mesh:run.tyreType?TYRES[run.tyreType].mesh:"", crumb:!!m.crumb,
           batchId:"", batchNo:"", autoclaveId:"", paired:false, quality:"", passes:1,
           start:run.segStart||end, end:end, runtimeMin:runtimeMin, hoursRun:Math.round((runtimeMin/60)*100)/100,
-          kWh:fields.kWh==null?"":fields.kWh, firewoodKg:fields.firewoodKg==null?"":fields.firewoodKg, workers:fields.workers==null?"":fields.workers,
-          weightKg:"", weighEntries:(m.outWeight?[]:undefined), needsWeigh:!!m.outWeight,
+          kWh:fields.kWh==null?"":fields.kWh, elecStart:fields.elecStart==null?"":fields.elecStart, elecEnd:fields.elecEnd==null?"":fields.elecEnd,
+          firewoodKg:fields.firewoodKg==null?"":fields.firewoodKg, workers:fields.workers==null?"":fields.workers,
+          weightKg:"", weighEntries:(m.outWeight?(run.weighEntries||[]):undefined), needsWeigh:!!m.outWeight,
           synced:false, createdAt:end
         });
       }
@@ -638,6 +681,8 @@
       existing.hoursRun=Math.round((existing.runtimeMin/60)*100)/100;
       existing.passes=(existing.passes||1)+1;
       existing.end=end; existing.synced=false;
+      if(fields.elecEnd!=null) existing.elecEnd=fields.elecEnd;
+      if((existing.elecStart==null||existing.elecStart==="")&&fields.elecStart!=null) existing.elecStart=fields.elecStart;
       existing.src1=sv.src1; existing.src2=sv.src2; existing.src3=sv.src3; existing.src4=sv.src4;
       if(fields.weightKg!=null && (existing.weightKg===""||existing.weightKg==null)) existing.weightKg=fields.weightKg;
       state.machines[mid].running=null; postStatus(mid,"idle");
@@ -650,11 +695,11 @@
       id:uid(), device:state.settings.device||"", machine:m.name, machineId:m.id, short:m.short, kind:m.kind, line:"special",
       batchId:b.id, batchNo:b.no, capacity:b.capacity, formulation:b.formulation,
       autoclaveId:b.autoclaveId||"", paired:!!b.paired, passes:1,
-      shiftDate:curShift().date, shift:curShift().name,
+      shiftDate:curShift().date, shift:curShift().name, supervisor:curShift().supervisor||"",
       quality:run.quality||"", start:run.segStart||run.start||end, end:end, runtimeMin:runtimeMin,
       hoursRun:Math.round((runtimeMin/60)*100)/100,
       src1:sv.src1, src2:sv.src2, src3:sv.src3, src4:sv.src4,
-      kWh:fields.kWh==null?"":fields.kWh, firewoodKg:fields.firewoodKg==null?"":fields.firewoodKg,
+      kWh:fields.kWh==null?"":fields.kWh, elecStart:fields.elecStart==null?"":fields.elecStart, elecEnd:fields.elecEnd==null?"":fields.elecEnd, firewoodKg:fields.firewoodKg==null?"":fields.firewoodKg,
       workers:fields.workers==null?"":fields.workers,
       weightKg:fields.weightKg==null?"":fields.weightKg, weighEntries:[], needsWeigh:!!m.weigh,
       synced:false, createdAt:end
@@ -666,6 +711,82 @@
     if(m.kind==="autoclave") toast(b.no+" unloaded · ready for refiners","ok");
     else if(m.weigh && row.weightKg==="") toast("Run logged · weigh "+b.no+" "+row.quality,"ok");
     else toast(m.name+" run logged","ok");
+  }
+  /* ---- live weighing while a shiftwise machine (grinder/coarse) is running ---- */
+  function liveWeighRun(mid){ var st=state.machines[mid]; return st&&st.running?st.running:null; }
+  function addLiveWeigh(mid, kg){ var run=liveWeighRun(mid); if(!run) return; run.weighEntries=run.weighEntries||[]; run.weighEntries.push(Math.round(kg*100)/100); save(); openLiveWeighSheet(mid); }
+  function removeLiveWeigh(mid, idx){ var run=liveWeighRun(mid); if(!run||!run.weighEntries) return; run.weighEntries.splice(idx,1); save(); openLiveWeighSheet(mid); }
+  function openLiveWeighSheet(mid){
+    var m=M(mid), run=liveWeighRun(mid); if(!run) return; run.weighEntries=run.weighEntries||[];
+    var entries=run.weighEntries, total=sum(entries);
+    var list = entries.length ? '<div class="weighlist">'+entries.map(function(v,i){ return '<div class="weighrow"><span class="tnum">'+v+' kg</span><button class="wdel" data-lwdel="'+i+'" aria-label="remove">✕</button></div>'; }).join("")+'</div>'
+      : '<div class="hint" style="margin:4px 0 12px">Add each load as it comes off — they keep adding up while the machine runs. Finalise &amp; submit in the Weigh tab after you stop it.</div>';
+    openSheet('<div class="sheet-h"><span class="led" style="background:radial-gradient(circle at 35% 30%,#cfe0ee,var(--steel))"></span><b>Add weight — '+esc(m.name)+'</b></div>'+
+      '<div class="sheet-sub">'+(run.line==="grind"?'Grinder crumb · ':'Coarse · ')+esc(run.shift)+' · '+esc(fmtDay(run.shiftDate))+(run.tyreType?' · '+esc(TYRES[run.tyreType].mesh):'')+'</div>'+
+      '<div class="ro" style="margin-bottom:14px"><span class="k">Running total</span><span class="v" style="color:var(--elec)">'+total+' kg</span></div>'+
+      list+
+      '<div class="sheet-label">Add a weighing</div>'+
+      '<div class="field-inline" style="align-items:stretch"><div class="field" style="flex:2;margin-bottom:0"><div class="num-suffix"><input id="lw-add" type="number" inputmode="decimal" placeholder="0"><span class="sfx">kg</span></div></div>'+
+      '<button class="btn elec" id="lw-plus" style="flex:1">+ Add</button></div>'+
+      '<div class="sheet-actions"><button class="btn primary block" data-act="close">Done</button></div>');
+    var inp=sheet.querySelector("#lw-add");
+    setTimeout(function(){ try{ inp.focus(); }catch(e){} },120);
+    function add(){ var v=num(inp.value); if(v==null||v<=0){ toast("Enter a weight","warn"); return; } addLiveWeigh(mid,v); }
+    sheet.querySelector("#lw-plus").addEventListener("click",add);
+    inp.addEventListener("keydown",function(e){ if(e.key==="Enter") add(); });
+    sheet.querySelectorAll("[data-lwdel]").forEach(function(el){ el.addEventListener("click",function(){ removeLiveWeigh(mid, parseInt(el.getAttribute("data-lwdel"),10)); }); });
+  }
+  /* ---- Special -> SuperFine conversion (same batch); processing cost follows the kg ---- */
+  function superfineRowFor(batchId){
+    for(var i=0;i<state.runs.length;i++){ var r=state.runs[i];
+      if(r.machineId==="R4" && (r.quality==="SuperFine") && r.batchId===batchId) return r; }
+    return null;
+  }
+  function applyConversion(specialRow, qty, stage){
+    qty=Math.round(qty*100)/100;
+    specialRow.weightKg=Math.round(((parseFloat(specialRow.weightKg)||0)-qty)*100)/100;
+    specialRow.convOutKg=Math.round((((parseFloat(specialRow.convOutKg)||0))+qty)*100)/100;
+    specialRow.synced=false;
+    var sf=superfineRowFor(specialRow.batchId), end=Date.now();
+    if(sf){
+      sf.weightKg=Math.round(((parseFloat(sf.weightKg)||0)+qty)*100)/100;
+      sf.convInKg=Math.round((((parseFloat(sf.convInKg)||0))+qty)*100)/100;
+      sf.needsWeigh=false; sf.synced=false;
+    } else {
+      var b=batch(specialRow.batchId);
+      state.runs.push({
+        id:uid(), device:state.settings.device||"", machine:"Refiner 4", machineId:"R4", short:"R4", kind:"refiner", line:"special",
+        batchId:specialRow.batchId, batchNo:specialRow.batchNo, capacity:specialRow.capacity||(b?b.capacity:""), formulation:specialRow.formulation||(b?b.formulation:""),
+        autoclaveId:specialRow.autoclaveId||"", paired:!!specialRow.paired, passes:1,
+        shiftDate:specialRow.shiftDate, shift:specialRow.shift, supervisor:specialRow.supervisor||(curShift().supervisor||""),
+        quality:"SuperFine", start:end, end:end, runtimeMin:0, hoursRun:0,
+        kWh:"", elecStart:"", elecEnd:"", firewoodKg:"", workers:"", weightKg:qty, convInKg:qty, converted:true,
+        needsWeigh:false, synced:false, createdAt:end
+      });
+    }
+    var c=curShift();
+    state.conversions.push({ id:uid(), device:state.settings.device||"", batchNo:specialRow.batchNo, qty:qty, stage:stage,
+      ts:end, shiftDate:c.date, shift:c.name, supervisor:c.supervisor||"", synced:false });
+  }
+  function convertAtWeigh(runId, qty){
+    var r=weighRow(runId); if(!r) return;
+    var draft=sum(r.weighEntries);
+    if(draft<=0){ toast("Add the Special weight first","warn"); return; }
+    if(qty==null||qty<=0){ toast("Enter kg to convert","warn"); return; }
+    if(qty>draft){ toast("Only "+draft+" kg weighed","warn"); return; }
+    r.weightKg=draft;                       // submit full Special weight first
+    applyConversion(r, qty, "weighing");
+    save(); closeSheet(); render();
+    toast(qty+" kg → SuperFine · "+(draft-qty)+" kg Special","ok");
+  }
+  function convertAtPack(runId, qty){
+    var r=weighRow(runId); if(!r) return;
+    var have=parseFloat(r.weightKg)||0;
+    if(qty==null||qty<=0){ toast("Enter kg to convert","warn"); return; }
+    if(qty>have){ toast("Only "+have+" kg Special here","warn"); return; }
+    applyConversion(r, qty, "packing");
+    save(); closeSheet(); render();
+    toast(qty+" kg → SuperFine of "+r.batchNo,"ok");
   }
   function weighRow(runId){ for(var i=0;i<state.runs.length;i++) if(state.runs[i].id===runId) return state.runs[i]; return null; }
   function addWeighEntry(runId, kg){
@@ -721,6 +842,8 @@
     paired:(r.paired==null?null:!!r.paired), quality:sbN(r.quality), tyre_type:sbN(r.tyreType), mesh:sbN(r.mesh),
     passes:sbN(r.passes), started_at:sbISO(r.start), ended_at:sbISO(r.end),
     runtime_min:sbN(r.runtimeMin), hours_run:sbN(r.hoursRun), kwh:sbN(r.kWh), firewood_kg:sbN(r.firewoodKg),
+    elec_start:sbN(r.elecStart), elec_end:sbN(r.elecEnd), supervisor:sbN(r.supervisor),
+    conv_out_kg:sbN(r.convOutKg), conv_in_kg:sbN(r.convInKg),
     workers:sbN(r.workers), weight_kg:sbN(r.weightKg),
     src1:sbN(r.src1), src2:sbN(r.src2), src3:sbN(r.src3), src4:sbN(r.src4) }; }
   function dispToSb(d){ return {
@@ -731,6 +854,13 @@
     id:m.id, device:sbStr(m.device), machine_id:sbStr(m.machineId), machine:sbStr(m.machine),
     down_start:sbISO(m.downStart), repaired_at:sbISO(m.repairedAt), downtime_min:sbN(m.downtimeMin),
     root_cause:sbN(m.rootCause), resolution:sbN(m.resolution), prevention:sbN(m.prevention) }; }
+  function bearingToSb(x){ return {
+    id:x.id, device:sbStr(x.device), machine_id:sbStr(x.machineId), machine:sbStr(x.machine),
+    position:sbStr(x.position), bearing_type:sbStr(x.bearingType), temp_c:sbN(x.tempC),
+    ts:sbISO(x.ts==null?null:+new Date(x.ts)), shift_date:sbN(x.shiftDate), shift:sbN(x.shift), supervisor:sbN(x.supervisor) }; }
+  function convToSb(x){ return {
+    id:x.id, device:sbStr(x.device), batch_no:sbStr(x.batchNo), from_quality:"Special", to_quality:"SuperFine",
+    qty_kg:sbN(x.qty), stage:sbStr(x.stage), ts:sbISO(x.ts), shift_date:sbN(x.shiftDate), shift:sbN(x.shift), supervisor:sbN(x.supervisor) }; }
   function sbPush(table, rows){
     var base=(state.settings.supabaseUrl||"").trim().replace(/\/+$/,"");
     var key=(state.settings.supabaseKey||"").trim();
@@ -755,16 +885,18 @@
   }
   function syncSupabase(opts){
     opts=opts||{}; var quiet=!!opts.auto;
-    var pending=unsynced(), pendD=unsyncedDispatches(), pendM=unsyncedMaintenance();
-    if(!pending.length && !pendD.length && !pendM.length){ if(!quiet) toast("Nothing new to sync","ok"); return; }
+    var pending=unsynced(), pendD=unsyncedDispatches(), pendM=unsyncedMaintenance(), pendB=unsyncedBearings(), pendC=unsyncedConversions();
+    if(!pending.length && !pendD.length && !pendM.length && !pendB.length && !pendC.length){ if(!quiet) toast("Nothing new to sync","ok"); return; }
     if(syncing) return; syncing=true; if(!quiet) render();
     var jobs=[];
     if(pending.length) jobs.push(sbPush("runs", pending.map(runToSb)).then(function(){ markSynced(state.runs, pending); }));
     if(pendD.length) jobs.push(sbPush("dispatches", pendD.map(dispToSb)).then(function(){ markSynced(state.dispatches, pendD); }));
     if(pendM.length) jobs.push(sbPush("maintenance", pendM.map(maintToSb)).then(function(){ markSynced(state.maintenance, pendM); }));
+    if(pendB.length) jobs.push(sbPush("bearing_logs", pendB.map(bearingToSb)).then(function(){ markSynced(state.bearingLogs, pendB); }));
+    if(pendC.length) jobs.push(sbPush("conversions", pendC.map(convToSb)).then(function(){ markSynced(state.conversions, pendC); }));
     Promise.all(jobs).then(function(){
       state.lastSyncAt=Date.now(); syncing=false; store.write(JSON.stringify(state));
-      var n=pending.length+pendD.length+pendM.length;
+      var n=pending.length+pendD.length+pendM.length+pendB.length+pendC.length;
       var sheetOpen=document.getElementById("sheet") && document.getElementById("sheet").classList.contains("show");
       if(!quiet){ render(); toast("Saved "+n+" record"+(n>1?"s":"")+" to the database","ok"); }
       else if(active==="settings" && !sheetOpen){ render(); }
@@ -861,6 +993,7 @@
   }
 
   function viewMachines(){
+    refreshAutoShift();
     var groups=[];
     MACHINES.filter(function(m){ return m.enabled!==false; }).forEach(function(m){
       var g=groups[groups.length-1];
@@ -876,7 +1009,11 @@
       '<div class="crumbcell"><span class="cl">Truck crumb · 30#</span><span class="cv tnum">'+crumbAvail("truck")+' <small>kg</small></span><span class="cu">special line</span></div>'+
       '<div class="crumbcell"><span class="cl">Bike crumb · 20#</span><span class="cv tnum">'+crumbAvail("bike")+' <small>kg</small></span><span class="cu">coarse line</span></div>'+
       '</div>';
-    return '<div class="view-head"><h1>Machines</h1><div class="meta"><span class="shiftchip" data-shift="1"><b>'+esc(curShift().name)+'</b> · '+esc(fmtDay(curShift().date))+' <span style="opacity:.6">▾</span></span></div></div>'+crumbBar+body;
+    var due=dueMachines();
+    var dueBar = due.length ? '<div class="duebar" data-bearings-any="1">🌡 '+due.length+' machine'+(due.length>1?'s':'')+' due for bearing temp logging — '+due.map(function(m){return esc(m.short);}).join(", ")+' · tap to log</div>' : '';
+    var c=curShift();
+    var sup = c.supervisor ? esc(c.supervisor) : '<span style="color:var(--amber)">set supervisor</span>';
+    return '<div class="view-head"><h1>Machines</h1><div class="meta"><span class="shiftchip" data-shift="1"><b>'+esc(c.name)+'</b> · '+esc(fmtDay(c.date))+' · 👤 '+sup+' <span style="opacity:.6">▾</span></span></div></div>'+dueBar+crumbBar+body;
   }
   function lastRunFor(mid){
     var last=null;
@@ -892,9 +1029,12 @@
     var pillTxt = down ? "DOWN" : (on ? (paused?"Paused":"Running") : "Idle");
     var pillCls = down ? "down" : (on ? (paused?"paused":"run") : "");
     var wrench = down ? '' : '<button class="wbtn" data-breakdown="'+m.id+'" aria-label="Report breakdown"><svg viewBox="0 0 24 24"><path d="M14.7 6.3a4 4 0 0 1-5.4 5.4L4 17v3h3l5.3-5.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2-2 2.5-2.5Z"/></svg></button>';
+    var bspec=bearingSpec(m), bdue=bspec?bearingDue(m):false;
+    var thermo = bspec ? '<button class="tbtn'+(bdue?' due':'')+'" data-bearings="'+m.id+'" aria-label="Bearing temperatures"><svg viewBox="0 0 24 24"><path d="M12 14.8V6"/><circle cx="12" cy="17.5" r="3.2"/></svg></button>' : '';
+    var scale = (on && !paused && m.outWeight && (m.kind==="grind"||m.kind==="coarse")) ? '<button class="tbtn" data-liveweigh="'+m.id+'" aria-label="Add weight" style="color:var(--steel)"><svg viewBox="0 0 24 24"><path d="M12 3v3M5 7h14M5 7 2 15a4 4 0 0 0 6 0L5 7Zm14 0-3 8a4 4 0 0 0 6 0l-3-8ZM9 21h6M12 6v15"/></svg></button>' : '';
     var head='<div class="mtop"><span class="led"></span><div class="mname"><b>'+esc(m.name)+'</b>'+
       (sub?'<small>'+esc(sub)+'</small>':'')+
-      '</div>'+wrench+'<span class="pill '+pillCls+'">'+pillTxt+'</span></div>';
+      '</div>'+scale+thermo+wrench+'<span class="pill '+pillCls+'">'+pillTxt+'</span></div>';
     var body;
     if(down){
       body='<div class="mbody"><div class="runline"><div class="what"><span class="qchip" style="background:var(--err);color:#fff">Breakdown</span>'+
@@ -964,19 +1104,25 @@
     toast(M(mid).short+" back online · logged","ok"); postStatus(mid, st.running?(st.running.paused?"paused":"running"):"idle"); }
 
   /* ----- shift context & report ----- */
-  function openShiftPicker(){ var c=curShift();
-    openSheet('<div class="sheet-h"><b>Current shift</b></div>'+
-      '<div class="sheet-sub">New special-line runs (autoclave, refiners) are tagged with this shift &amp; date for the production reports.</div>'+
+  function openShiftPicker(){ var c=curShift(); var pick={name:c.name};
+    openSheet('<div class="sheet-h"><b>Shift &amp; supervisor</b></div>'+
+      '<div class="sheet-sub">The shift follows the clock automatically. Set who is in charge — it is tagged on everything logged this shift.</div>'+
+      '<div class="field"><label>Supervisor in charge</label><select id="sh-sup">'+
+        '<option value="">— select —</option>'+
+        SUPERVISORS.map(function(n){ return '<option value="'+esc(n)+'"'+(c.supervisor===n?' selected':'')+'>'+esc(n)+'</option>'; }).join("")+
+        ((c.supervisor && SUPERVISORS.indexOf(c.supervisor)<0)?'<option value="'+esc(c.supervisor)+'" selected>'+esc(c.supervisor)+'</option>':'')+
+      '</select></div>'+
       '<div class="sheet-label">Shift</div><div class="pickgrid q4">'+
         '<button class="pick'+(c.name==="Day"?" sel":"")+'" data-shift-set="Day"><b>Day</b></button>'+
         '<button class="pick'+(c.name==="Night"?" sel":"")+'" data-shift-set="Night"><b>Night</b></button></div>'+
-      '<div class="field" style="margin-top:14px"><label>Date</label><input id="sh-date" type="date" value="'+esc(c.date)+'"></div>'+
-      '<div class="sheet-actions"><button class="btn primary block" data-act="close">Done</button></div>');
+      '<div class="field" style="margin-top:14px"><label>Date <span class="muted" style="text-transform:none;letter-spacing:0">— auto today</span></label><input id="sh-date" type="date" value="'+esc(c.date)+'"></div>'+
+      '<div class="sheet-actions"><button class="btn primary block" id="sh-done">Save</button></div>');
     sheet.querySelectorAll("[data-shift-set]").forEach(function(el){ el.addEventListener("click",function(){
-      var name=el.getAttribute("data-shift-set"), date=(sheet.querySelector("#sh-date").value||c.date);
-      sheet.querySelectorAll("[data-shift-set]").forEach(function(g){ g.classList.remove("sel"); }); el.classList.add("sel");
-      setShift(name,date); toast("Shift set · "+name+" "+fmtDay(date),"ok"); }); });
-    sheet.querySelector("#sh-date").addEventListener("change",function(){ setShift(curShift().name, this.value); }); }
+      pick.name=el.getAttribute("data-shift-set");
+      sheet.querySelectorAll("[data-shift-set]").forEach(function(g){ g.classList.remove("sel"); }); el.classList.add("sel"); }); });
+    sheet.querySelector("#sh-done").addEventListener("click",function(){
+      var date=(sheet.querySelector("#sh-date").value||c.date), sup=(sheet.querySelector("#sh-sup").value||"").trim();
+      setShift(pick.name,date,sup); closeSheet(); toast("Saved · "+pick.name+(sup?" · "+sup:""),"ok"); }); }
 
   function shiftAgg(key){
     var parts=key.split("|"), date=parts[0], shift=parts[1];
@@ -1012,6 +1158,37 @@
         ln('Runs logged', a.runs)+
       '</div>'+
       '<div class="sheet-actions"><button class="btn primary block" data-act="close">Close</button></div>'); }
+
+  function fmtAgo(ms){ var s=Math.round((Date.now()-ms)/1000); if(s<60) return s+"s ago"; var mn=Math.round(s/60); if(mn<60) return mn+"m ago"; var h=Math.floor(mn/60); var rem=mn%60; return h+"h"+(rem?" "+rem+"m":"")+" ago"; }
+  function openBearingSheet(mid){
+    var m=M(mid), spec=bearingSpec(m); if(!spec) return;
+    var label=spec.type==="bush"?"Bush":"Bearing", last=lastBearingLog(mid);
+    function lastTempFor(pos){ var best=null; (state.bearingLogs||[]).forEach(function(x){ if(x.machineId===mid&&x.position===pos){ if(!best||+new Date(x.ts)>+new Date(best.ts)) best=x; } }); return best; }
+    var rows=spec.positions.map(function(pos,i){
+      var lt=lastTempFor(pos);
+      return '<div class="field"><label>'+label+' '+esc(pos)+(lt?' <span class="muted" style="text-transform:none;letter-spacing:0">— last '+lt.tempC+'°C, '+fmtAgo(+new Date(lt.ts))+'</span>':'')+'</label>'+
+        '<div class="num-suffix"><input id="bt-'+i+'" type="number" inputmode="decimal" placeholder="temperature"><span class="sfx">°C</span></div></div>';
+    }).join("");
+    var dueNote = bearingDue(m) ? '<div class="hint" style="color:var(--amber);margin-top:-2px">⚠ Overdue — log now.</div>' : '';
+    openSheet('<div class="sheet-h"><span class="led" style="background:radial-gradient(circle at 35% 30%,#9fe0ea,var(--elec))"></span><b>'+label+' temps — '+esc(m.name)+'</b></div>'+
+      '<div class="sheet-sub">'+spec.positions.length+' '+label.toLowerCase()+(spec.positions.length>1?'s':'')+' · log every '+spec.intervalH+'\u00a0hour'+(spec.intervalH>1?'s':'')+' while running'+(last!=null?' · last '+fmtAgo(last):' · not logged yet')+'.</div>'+
+      dueNote+rows+
+      '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button>'+
+      '<button class="btn primary" id="bt-go">Log temperatures</button></div>');
+    sheet.querySelector("#bt-go").addEventListener("click",function(){
+      var temps=spec.positions.map(function(pos,i){ return { pos:pos, v:num(sheet.querySelector("#bt-"+i).value) }; });
+      commitBearings(mid, temps);
+    });
+  }
+  function commitBearings(mid, temps){
+    if(!temps.some(function(t){ return t.v!=null; })){ toast("Enter at least one temperature","warn"); return; }
+    var m=M(mid), spec=bearingSpec(m), c=curShift(), ts=new Date().toISOString();
+    state.bearingLogs=state.bearingLogs||[];
+    temps.forEach(function(t){ if(t.v==null) return;
+      state.bearingLogs.push({ id:uid(), device:state.settings.device||"", machineId:mid, machine:m.name,
+        position:t.pos, bearingType:spec.type, tempC:t.v, ts:ts, shiftDate:c.date, shift:c.name, supervisor:c.supervisor||"", synced:false }); });
+    save(); closeSheet(); render(); toast(m.short+" "+spec.type+" temps logged","ok");
+  }
 
   function viewBatches(){
     var act=activeBatches();
@@ -1109,12 +1286,19 @@
   function openPackSheet(runId){
     var r=weighRow(runId); if(!r) return; var b=batch(r.batchId);
     var w=parseFloat(r.weightKg)||0, ps=packedSacksOf(r), need=sacksNeeded(r);
+    var isSpecial = r.quality==="Special";
+    var convBox = isSpecial ? '<div class="sheet-label" style="margin-top:16px">Convert Special → SuperFine</div>'+
+      '<div class="field-inline" style="align-items:stretch"><div class="field" style="flex:2;margin-bottom:0"><div class="num-suffix"><input id="pk-conv" type="number" inputmode="decimal" placeholder="0"><span class="sfx">kg</span></div></div>'+
+      '<button class="btn" id="pk-conv-go" style="flex:1;border-color:#7a5a1f;color:var(--amber)">→ SuperFine</button></div>'+
+      '<div class="hint" style="margin-top:-4px">Moves this many kg — and its processing cost — to SuperFine of '+esc(b?b.no:'')+'. The Special weight here drops by the same amount.</div>' : '';
     openSheet('<div class="sheet-h"><span class="led" style="background:var(--elec)"></span><b>Pack '+esc(b?b.no:'')+' · '+esc(r.quality)+'</b></div>'+
       '<div class="sheet-sub">Weighed '+w+' kg · about '+need+' sacks of '+SACK_KG+' kg. It clears packing once you\'re within '+PACK_TOL+' kg.</div>'+
       '<div class="field"><label>Sacks packed (total so far)</label><input id="pk-s" type="number" inputmode="numeric" value="'+(ps||"")+'" placeholder="'+need+'"></div>'+
+      convBox+
       '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button>'+
       '<button class="btn primary" id="pk-go">Save</button></div>');
     sheet.querySelector("#pk-go").addEventListener("click",function(){ setPacked(runId, num(sheet.querySelector("#pk-s").value)); });
+    if(isSpecial){ var cg=sheet.querySelector("#pk-conv-go"); if(cg) cg.addEventListener("click",function(){ convertAtPack(runId, num(sheet.querySelector("#pk-conv").value)); }); }
   }
   function setPacked(runId, sacks){
     var r=weighRow(runId); if(!r) return; var b=batch(r.batchId);
@@ -1379,6 +1563,7 @@
       '<div class="sheet-label">Date</div><div class="field" style="margin-bottom:0"><input id="ss-date" type="date" value="'+d.date+'"></div>'+
       '<div class="sheet-label">Shift</div><div class="pickgrid">'+shiftBtns+'</div>'+
       tyreBlock+
+      '<div class="field"><label>Initial electricity reading <span class="muted" style="text-transform:none;letter-spacing:0">— meter units now</span></label><div class="num-suffix"><input id="ss-elec" type="number" inputmode="decimal" placeholder="meter reading"><span class="sfx">units</span></div></div>'+
       '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button>'+
       '<button class="btn primary" id="ss-go">Start ▸</button></div>');
     sheet.querySelectorAll("[data-pick-shift]").forEach(function(el){
@@ -1391,7 +1576,7 @@
     });
     sheet.querySelector("#ss-go").addEventListener("click",function(){
       var dt=sheet.querySelector("#ss-date").value; if(!dt){ toast("Pick a date","warn"); return; }
-      startShiftMachine(mid, picks.shift, dt, picks.tyre);
+      startShiftMachine(mid, picks.shift, dt, picks.tyre, num(sheet.querySelector("#ss-elec").value));
     });
   }
 
@@ -1429,11 +1614,10 @@
       if(!picks.type){ crumbEl.style.display="none"; return; }
       crumbEl.style.display="";
       var store = picks.type==="coarse" ? "bike" : "truck";
-      var have = crumbAvail(store), need = m.capacity, ok = have>=need;
+      var have = crumbAvail(store), need = m.capacity, after=Math.round((have-need)*100)/100, ok = have>=need;
       crumbEl.innerHTML='<span class="k">'+(store==="bike"?"Bike crumb 20#":"Truck crumb 30#")+'</span>'+
-        '<span class="v" style="color:'+(ok?"var(--ok)":"var(--err)")+'">'+have+' / '+need+' kg</span>';
-      goEl.disabled=!ok; goEl.style.opacity=ok?"1":".5";
-      goEl.textContent = ok ? "Load ▸" : "Not enough crumb";
+        '<span class="v" style="color:'+(ok?"var(--ok)":"var(--amber)")+'">'+have+' / '+need+' kg'+(ok?'':' · stock will go to '+after)+'</span>';
+      goEl.disabled=false; goEl.style.opacity="1"; goEl.textContent="Load ▸";
     }
     sheet.querySelectorAll("[data-pick-form]").forEach(function(el){
       el.addEventListener("click",function(){
@@ -1482,6 +1666,7 @@
       '<div class="sheet-sub">'+(m.sub?esc(m.sub.charAt(0).toUpperCase()+m.sub.slice(1))+' · ':'')+'Pick batch'+(m.needsQuality?' and quality.':'.')+'</div>'+
       '<div class="sheet-label">Batch</div><div class="pickgrid">'+batchBtns+'</div>'+qBtns+
       '<div id="mixbox" style="display:none"><div class="sheet-label" style="margin-top:14px">Mixed from <span class="muted" style="text-transform:none;letter-spacing:0">— add tailings of other batches</span></div><div class="pickgrid" id="mixgrid"></div></div>'+
+      '<div class="field"><label>Initial electricity reading <span class="muted" style="text-transform:none;letter-spacing:0">— meter units now</span></label><div class="num-suffix"><input id="rf-elec" type="number" inputmode="decimal" placeholder="meter reading"><span class="sfx">units</span></div></div>'+
       '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button>'+
       '<button class="btn primary" id="start-go" disabled>Start ▸</button></div>');
     // wire selection
@@ -1520,7 +1705,7 @@
       if(picks.quality==="Medium") src=[primNo].concat(extraNos);
       else if(picks.quality==="Fine" && extraNos.length) src=[primNo].concat(extraNos);
       src=src.filter(function(v,i){ return v && src.indexOf(v)===i; }).slice(0,4);
-      startRefiner(mid,picks.batchId,picks.quality,src); });
+      startRefiner(mid,picks.batchId,picks.quality,src,num(sheet.querySelector("#rf-elec").value)); });
     function checkGo(){ go.disabled=!(picks.batchId && (!m.needsQuality || picks.quality)); }
     function sel(group,one){ group.forEach(function(g){ g.classList.remove("sel"); }); one.classList.add("sel"); }
   }
@@ -1537,7 +1722,8 @@
       energyField='<div class="field"><label>Firewood</label><div class="num-suffix"><input id="f-fw" type="number" inputmode="decimal" value="'+fwDefault+'"><span class="sfx">kg</span></div></div>';
     } else {
       if(sw) workerVal=2;
-      energyField='<div class="field"><label>Electricity</label><div class="num-suffix"><input id="f-kwh" type="number" inputmode="decimal" placeholder="0"><span class="sfx">kWh</span></div></div>';
+      var es0=(run.elecStart===""||run.elecStart==null)?null:run.elecStart;
+      energyField='<div class="field"><label>Final electricity reading'+(es0!=null?' <span class="muted" style="text-transform:none;letter-spacing:0">— started at '+es0+'</span>':'')+'</label><div class="num-suffix"><input id="f-elec" type="number" inputmode="decimal" placeholder="meter reading now"><span class="sfx">units</span></div></div>';
     }
     fields='<div class="field-inline">'+energyField+
       '<div class="field"><label>Workers</label><input id="f-work" type="number" inputmode="numeric" placeholder="0" value="'+workerVal+'"></div></div>';
@@ -1557,8 +1743,13 @@
       '<button class="btn primary" id="off-go">'+(m.kind==="autoclave"?"Log & unload":"Log run")+'</button></div>');
     sheet.querySelector("#off-go").addEventListener("click",function(){
       var f={};
-      var kwh=sheet.querySelector("#f-kwh"), fw=sheet.querySelector("#f-fw"), wk=sheet.querySelector("#f-work"), wt=sheet.querySelector("#f-wt");
-      if(kwh) f.kWh=num(kwh.value); if(fw) f.firewoodKg=num(fw.value);
+      var elec=sheet.querySelector("#f-elec"), fw=sheet.querySelector("#f-fw"), wk=sheet.querySelector("#f-work"), wt=sheet.querySelector("#f-wt");
+      if(elec){
+        var fin=num(elec.value), es=(run.elecStart===""||run.elecStart==null)?null:run.elecStart;
+        f.elecEnd=fin; f.elecStart=es;
+        if(fin!=null && es!=null) f.kWh=Math.max(0, Math.round((fin-es)*100)/100);
+      }
+      if(fw) f.firewoodKg=num(fw.value);
       f.workers=wk?num(wk.value):null; if(wt) f.weightKg=num(wt.value);
       commitRun(mid,f);
     });
@@ -1568,6 +1759,11 @@
     var r=weighRow(runId); if(!r) return;
     if(!r.weighEntries) r.weighEntries=[];
     var entries=r.weighEntries, total=sum(entries);
+    var isSpecial = !r.shiftwise && r.machineId==="R4" && r.quality==="Special";
+    var convBox = isSpecial ? '<div class="sheet-label" style="margin-top:16px">Found SuperFine in this Special?</div>'+
+      '<div class="field-inline" style="align-items:stretch"><div class="field" style="flex:2;margin-bottom:0"><div class="num-suffix"><input id="w-conv" type="number" inputmode="decimal" placeholder="0"><span class="sfx">kg</span></div></div>'+
+      '<button class="btn" id="w-conv-go" style="flex:1;border-color:#7a5a1f;color:var(--amber)">→ SuperFine</button></div>'+
+      '<div class="hint" style="margin-top:-4px">Submits the Special weight, then moves this many kg — and its processing cost — to SuperFine of '+esc(r.batchNo)+'.</div>' : '';
     var list = entries.length
       ? '<div class="weighlist">'+entries.map(function(v,i){
           return '<div class="weighrow"><span class="tnum">'+v+' kg</span><button class="wdel" data-wdel="'+i+'" aria-label="remove">✕</button></div>';
@@ -1582,6 +1778,7 @@
       '<div class="sheet-label">Add a weighing</div>'+
       '<div class="field-inline" style="align-items:stretch"><div class="field" style="flex:2;margin-bottom:0"><div class="num-suffix"><input id="w-add" type="number" inputmode="decimal" placeholder="0"><span class="sfx">kg</span></div></div>'+
       '<button class="btn elec" id="w-plus" style="flex:1">+ Add</button></div>'+
+      convBox+
       '<div class="sheet-actions"><button class="btn ghost" data-act="close">Close</button>'+
       '<button class="btn primary" id="w-submit">Submit total</button></div>');
     var inp=sheet.querySelector("#w-add");
@@ -1593,6 +1790,7 @@
       el.addEventListener("click",function(){ removeWeighEntry(runId, parseInt(el.getAttribute("data-wdel"),10)); });
     });
     sheet.querySelector("#w-submit").addEventListener("click",function(){ submitWeight(runId); });
+    if(isSpecial){ var cg=sheet.querySelector("#w-conv-go"); if(cg) cg.addEventListener("click",function(){ convertAtWeigh(runId, num(sheet.querySelector("#w-conv").value)); }); }
   }
 
   /* ===================== render & events ===================== */
@@ -1644,6 +1842,9 @@
     if((t=e.target.closest("[data-qtake]"))){ var qt=t.getAttribute("data-qtake").split("|"); markTaken(qt[0],qt[1]); return; }
     if((t=e.target.closest("[data-closebatch-go]"))){ closeBatch(t.getAttribute("data-closebatch-go")); return; }
     if((t=e.target.closest("[data-closebatch]"))){ openCloseConfirm(t.getAttribute("data-closebatch")); return; }
+    if((t=e.target.closest("[data-liveweigh]"))){ openLiveWeighSheet(t.getAttribute("data-liveweigh")); return; }
+    if((t=e.target.closest("[data-bearings]"))){ openBearingSheet(t.getAttribute("data-bearings")); return; }
+    if((t=e.target.closest("[data-bearings-any]"))){ var dm=dueMachines()[0]; if(dm) openBearingSheet(dm.id); return; }
     if((t=e.target.closest("[data-breakdown-go]"))){ doMarkDown(t.getAttribute("data-breakdown-go")); return; }
     if((t=e.target.closest("[data-breakdown]"))){ markDown(t.getAttribute("data-breakdown")); return; }
     if((t=e.target.closest("[data-shift]"))){ openShiftPicker(); return; }
@@ -1678,6 +1879,8 @@
       state.runs.forEach(function(x){ x.synced=false; });
       (state.dispatches||[]).forEach(function(x){ x.synced=false; });
       (state.maintenance||[]).forEach(function(x){ x.synced=false; });
+      (state.bearingLogs||[]).forEach(function(x){ x.synced=false; });
+      (state.conversions||[]).forEach(function(x){ x.synced=false; });
       save(); render(); syncNow();
     }
     else if(act==="export"){ exportCSV(); }
@@ -1705,7 +1908,7 @@
         '<div class="sheet-actions"><button class="btn ghost" data-act="close">Keep data</button>'+
         '<button class="btn danger" data-act="reset-confirm">Erase everything</button></div>');
     }
-    else if(act==="reset-confirm"){ state=blank(); MACHINES.forEach(function(m){ state.machines[m.id]={running:null}; }); save(); closeSheet(); active="machines"; render(); toast("All data erased","ok"); }
+    else if(act==="reset-confirm"){ state=blank(); MACHINES.forEach(function(m){ state.machines[m.id]={running:null,down:null}; }); save(); closeSheet(); active="machines"; render(); toast("All data erased","ok"); }
   });
 
   /* live timers */
@@ -1725,6 +1928,8 @@
   // Live-state mirror for the read-only monitor app.
   setInterval(pushLiveState, 60000);
   setTimeout(pushLiveState, 5000);
+  // Auto shift-by-clock + refresh bearing-due warnings on the Machines screen.
+  setInterval(function(){ refreshAutoShift(); if(active==="machines") render(); }, 60000);
   if(typeof window!=="undefined"){
     window.addEventListener("online", function(){ scheduleAutoSync(1500); });
     window.addEventListener("focus", function(){ scheduleAutoSync(1500); });
@@ -1740,6 +1945,7 @@
 
   /* boot */
   load(); render(); scheduleAutoSync(3000);
+  if("serviceWorker" in navigator){ try{ navigator.serviceWorker.register("sw.js"); }catch(e){} }
 })();
 </script>
 </body>
