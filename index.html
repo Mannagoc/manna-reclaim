@@ -478,6 +478,7 @@
     if(!s.maintenance) s.maintenance=[];
     if(!s.bearingLogs) s.bearingLogs=[];
     if(!s.conversions) s.conversions=[];
+    if(!s.pendingDeletes) s.pendingDeletes=[];
     if(!s.leftout) s.leftout={};
     if(!s.shift) s.shift={date:todayISO(),name:autoShift(),supervisor:""};
     if(s.shift.supervisor==null) s.shift.supervisor="";
@@ -522,7 +523,7 @@
   function unsyncedMaintenance(){ return (state.maintenance||[]).filter(function(x){ return !x.synced; }); }
   function unsyncedBearings(){ return (state.bearingLogs||[]).filter(function(x){ return !x.synced; }); }
   function unsyncedConversions(){ return (state.conversions||[]).filter(function(x){ return !x.synced; }); }
-  function unsyncedCount(){ return unsynced().length + unsyncedDispatches().length + unsyncedMaintenance().length + unsyncedBearings().length + unsyncedConversions().length; }
+  function unsyncedCount(){ return unsynced().length + unsyncedDispatches().length + unsyncedMaintenance().length + unsyncedBearings().length + unsyncedConversions().length + ((state.pendingDeletes||[]).length); }
   function runningCount(){ var n=0; MACHINES.forEach(function(m){ if(state.machines[m.id].running) n++; }); return n; }
 
   function fmtElapsed(ms){ var s=Math.max(0,Math.floor(ms/1000));
@@ -900,6 +901,17 @@
     });
   }
   function markSynced(arr, items){ var set={}; items.forEach(function(x){ set[x.id]=1; }); arr.forEach(function(x){ if(set[x.id]) x.synced=true; }); }
+  function sbDeleteRun(id){
+    var base=(state.settings.supabaseUrl||"").trim().replace(/\/+$/,"");
+    var key=(state.settings.supabaseKey||"").trim();
+    return fetch(base+"/rest/v1/runs?id=eq."+encodeURIComponent(id),{
+      method:"DELETE",
+      headers:{ "apikey":key, "Authorization":"Bearer "+key, "Prefer":"return=minimal" }
+    }).then(function(res){
+      if(!res.ok && res.status!==404) return res.text().then(function(t){ throw new Error("HTTP "+res.status+" "+(t||"").slice(0,120)); });
+      return true;
+    });
+  }
   function syncErr(e){
     var m=(e&&e.message)||"no connection";
     if(typeof location!=="undefined" && location.protocol==="file:")
@@ -911,7 +923,8 @@
   function syncSupabase(opts){
     opts=opts||{}; var quiet=!!opts.auto;
     var pending=unsynced(), pendD=unsyncedDispatches(), pendM=unsyncedMaintenance(), pendB=unsyncedBearings(), pendC=unsyncedConversions();
-    if(!pending.length && !pendD.length && !pendM.length && !pendB.length && !pendC.length){ if(!quiet) toast("Nothing new to sync","ok"); return; }
+    var pendDel=(state.pendingDeletes||[]).slice();
+    if(!pending.length && !pendD.length && !pendM.length && !pendB.length && !pendC.length && !pendDel.length){ if(!quiet) toast("Nothing new to sync","ok"); return; }
     if(syncing) return; syncing=true; if(!quiet) render();
     var jobs=[];
     if(pending.length) jobs.push(sbPush("runs", pending.map(runToSb)).then(function(){ markSynced(state.runs, pending); }));
@@ -919,9 +932,11 @@
     if(pendM.length) jobs.push(sbPush("maintenance", pendM.map(maintToSb)).then(function(){ markSynced(state.maintenance, pendM); }));
     if(pendB.length) jobs.push(sbPush("bearing_logs", pendB.map(bearingToSb)).then(function(){ markSynced(state.bearingLogs, pendB); }));
     if(pendC.length) jobs.push(sbPush("conversions", pendC.map(convToSb)).then(function(){ markSynced(state.conversions, pendC); }));
+    if(pendDel.length) jobs.push(Promise.all(pendDel.map(sbDeleteRun)).then(function(){
+      state.pendingDeletes=(state.pendingDeletes||[]).filter(function(id){ return pendDel.indexOf(id)<0; }); }));
     Promise.all(jobs).then(function(){
       state.lastSyncAt=Date.now(); syncing=false; store.write(JSON.stringify(state));
-      var n=pending.length+pendD.length+pendM.length+pendB.length+pendC.length;
+      var n=pending.length+pendD.length+pendM.length+pendB.length+pendC.length+pendDel.length;
       var sheetOpen=document.getElementById("sheet") && document.getElementById("sheet").classList.contains("show");
       if(!quiet){ render(); toast("Saved "+n+" record"+(n>1?"s":"")+" to the database","ok"); }
       else if(active==="settings" && !sheetOpen){ render(); }
@@ -1105,11 +1120,12 @@
       '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button>'+
       '<button class="btn primary" data-breakdown-go="'+mid+'" style="background:var(--err)">Mark down</button></div>'); }
   function doMarkDown(mid){ var st=state.machines[mid]; if(!st) return;
-    if(st.running && !st.running.paused){ st.running.accumMs=(st.running.accumMs||0)+(Date.now()-(st.running.segStart||Date.now())); st.running.paused=true; }
+    var pausedNow=false;
+    if(st.running && !st.running.paused){ st.running.accumMs=(st.running.accumMs||0)+(Date.now()-(st.running.segStart||Date.now())); st.running.paused=true; pausedNow=true; }
     var sinceMs=Date.now();
     var bt=(sheet.querySelector("#bd-time")||{}).value||"";
     if(bt){ var ms=Date.parse(todayISO()+"T"+bt); if(!isNaN(ms)){ if(ms>Date.now()) ms-=86400000; sinceMs=ms; } }
-    st.down={ since:sinceMs }; save(); closeSheet(); render(); toast(M(mid).short+" marked DOWN","warn"); postStatus(mid,"paused"); }
+    st.down={ since:sinceMs, pausedRun:pausedNow }; save(); closeSheet(); render(); toast(M(mid).short+" marked DOWN","warn"); postStatus(mid,"paused"); }
   function openRepairSheet(mid){ var st=state.machines[mid]; if(!st||!st.down) return; var since=st.down.since;
     openSheet('<div class="sheet-h"><span class="led" style="background:var(--err)"></span><b>Log repair — '+esc(M(mid).name)+'</b></div>'+
       '<div class="sheet-sub">Down for '+fmtElapsed(Date.now()-since)+' (since '+fmtClock(since)+'). Complete the maintenance log to bring it back online.</div>'+
@@ -1118,12 +1134,35 @@
       '<div class="field"><label>3 · Steps so it never persists</label><textarea id="mt-prev" rows="2" placeholder="Preventive action / checks added"></textarea></div>'+
       '<div class="field"><label>Back online time <span class="muted" style="text-transform:none;letter-spacing:0">— leave blank for now</span></label><input id="mt-time" type="time"></div>'+
       '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button>'+
-      '<button class="btn primary" id="mt-go">Mark repaired</button></div>');
+      '<button class="btn primary" id="mt-go">Mark repaired</button></div>'+
+      '<button class="btn danger block" id="bd-cancel" style="margin-top:10px">Cancel this breakdown (entered by mistake)</button>');
     sheet.querySelector("#mt-go").addEventListener("click",function(){ commitMaintenance(mid,{
       cause:(sheet.querySelector("#mt-cause").value||"").trim(),
       fix:(sheet.querySelector("#mt-fix").value||"").trim(),
       prev:(sheet.querySelector("#mt-prev").value||"").trim(),
       backAt:(sheet.querySelector("#mt-time")||{}).value||"" }); });
+    var bdc=sheet.querySelector("#bd-cancel");
+    if(bdc) bdc.addEventListener("click",function(){ openCancelDownSheet(mid); });
+  }
+  function cancelDown(mid){
+    var st=state.machines[mid]; if(!st||!st.down){ closeSheet(); return; }
+    var resume = st.down.pausedRun && st.running && st.running.paused;
+    st.down=null;
+    if(resume){ st.running.paused=false; st.running.segStart=Date.now(); }
+    save(); closeSheet(); render();
+    toast(M(mid).short+" breakdown cancelled — nothing logged","ok");
+    postStatus(mid, st.running?(st.running.paused?"paused":"running"):"idle");
+  }
+  function openCancelDownSheet(mid){
+    var st=state.machines[mid]; if(!st||!st.down){ closeSheet(); return; }
+    var resumeNote=(st.down.pausedRun && st.running)?'<div class="hint" style="margin-top:8px">The run that was paused for this breakdown will resume.</div>':'';
+    openSheet('<div class="sheet-h"><b>Cancel this breakdown?</b></div>'+
+      '<div class="sheet-sub"><span class="batchref">'+esc(M(mid).name)+'</span> · marked down '+fmtClock(st.down.since)+'</div>'+
+      '<div class="hint">Removes the DOWN flag. Nothing is logged or sent — use only if it was reported by mistake.</div>'+
+      resumeNote+
+      '<div class="sheet-actions"><button class="btn ghost" data-act="close">Keep down</button>'+
+      '<button class="btn danger" id="cd-go">Yes, cancel breakdown</button></div>');
+    sheet.querySelector("#cd-go").addEventListener("click",function(){ cancelDown(mid); });
   }
   function commitMaintenance(mid,f){ var st=state.machines[mid]; if(!st||!st.down) return;
     if(!f.cause||!f.fix||!f.prev){ toast("Fill in all three questions","warn"); return; }
@@ -1434,7 +1473,7 @@
                       : '<span class="batchref" style="font-size:12px">'+esc(r.batchNo)+'</span>'+(r.quality?'<br>'+qchip(r.quality):'');
       var wt = (r.weightKg!==""&&r.weightKg!=null) ? esc(r.weightKg)+' kg' : (r.machineId==="R4" ? '<span class="muted">pending</span>' : '—');
       var mlabel = r.short || shortName(r.machineId);
-      return '<tr><td><span class="synced '+(r.synced?"yes":"")+'"></span></td>'+
+      return '<tr class="hrow" data-edit-run="'+esc(r.id)+'" style="cursor:pointer"><td><span class="synced '+(r.synced?"yes":"")+'"></span></td>'+
         '<td><b>'+esc(mlabel)+'</b>'+((r.passes||1)>1?' <span class="muted" style="font-size:10px">×'+r.passes+'</span>':'')+'<br><span class="muted" style="font-size:11px">'+when+'</span></td>'+
         '<td>'+col2+'</td>'+
         '<td class="tnum">'+fmtDur(r.runtimeMin)+'</td>'+
@@ -1443,9 +1482,89 @@
         '<td class="tnum">'+wt+'</td></tr>';
     }).join("");
     var u=unsynced().length;
-    return '<div class="view-head"><h1>History</h1><div class="meta">'+state.runs.length+' rows · '+u+' unsynced</div></div>'+
+    return '<div class="view-head"><h1>History</h1><div class="meta">'+state.runs.length+' rows · '+u+' unsynced · tap a row to edit</div></div>'+
       '<div class="panel scroll-x"><table class="hist"><thead><tr><th></th><th>Machine</th><th>Batch</th><th>Run</th><th>Energy</th><th>Crew</th><th>Weight</th></tr></thead><tbody>'+body+'</tbody></table></div>'+
       '<div style="margin-top:12px"><button class="btn ghost block" data-act="export">Export CSV backup</button></div>';
+  }
+
+  /* ---- Editable history: tap a row to correct or delete an entry ---- */
+  function findRun(id){ for(var i=0;i<state.runs.length;i++){ if(state.runs[i].id===id) return state.runs[i]; } return null; }
+  function openEditRun(id){
+    var r=findRun(id); if(!r){ closeSheet(); return; }
+    var isShift=!!r.shift;
+    var mm=r.machineId?M(r.machineId):null;
+    var isAuto=(r.kind==="autoclave")||(mm&&mm.kind==="autoclave");
+    var mlabel=r.short||shortName(r.machineId)||r.machine||"";
+    var whenTxt=isShift?(fmtDay(r.shiftDate)+' · '+r.shift):fmtDate(r.end);
+    var rows="";
+    if(!isShift){
+      rows+='<div class="field"><label>Batch number</label><input id="e-batch" type="text" value="'+esc(r.batchNo==null?"":r.batchNo)+'"></div>';
+      var qopts='<option value="">—</option>'+QUALITIES.map(function(q){ return '<option value="'+esc(q)+'"'+(r.quality===q?" selected":"")+'>'+esc(q)+'</option>'; }).join("");
+      rows+='<div class="field"><label>Quality</label><select id="e-qual">'+qopts+'</select></div>';
+    } else {
+      rows+='<div class="field-inline">'+
+        '<div class="field"><label>Shift</label><select id="e-shift"><option value="Day"'+(r.shift==="Day"?" selected":"")+'>Day</option><option value="Night"'+(r.shift==="Night"?" selected":"")+'>Night</option></select></div>'+
+        '<div class="field"><label>Shift date</label><input id="e-sdate" type="date" value="'+esc(r.shiftDate||"")+'"></div></div>';
+    }
+    rows+='<div class="field-inline">'+
+      '<div class="field"><label>Run time (min)</label><input id="e-rt" type="number" inputmode="decimal" value="'+esc(r.runtimeMin==null?"":r.runtimeMin)+'"></div>'+
+      '<div class="field"><label>Workers</label><input id="e-wk" type="number" inputmode="numeric" value="'+esc(r.workers==null?"":r.workers)+'"></div></div>';
+    if(isAuto){
+      rows+='<div class="field"><label>Firewood (kg)</label><input id="e-fw" type="number" inputmode="decimal" value="'+esc(r.firewoodKg==null?"":r.firewoodKg)+'"></div>';
+    } else {
+      rows+='<div class="field"><label>Energy (kWh)</label><input id="e-kwh" type="number" inputmode="decimal" value="'+esc(r.kWh==null?"":r.kWh)+'"></div>';
+    }
+    rows+='<div class="field"><label>Output weight (kg) <span class="muted" style="text-transform:none;letter-spacing:0">— blank = none</span></label><input id="e-wt" type="number" inputmode="decimal" value="'+esc(r.weightKg==null?"":r.weightKg)+'"></div>';
+    openSheet('<div class="sheet-h"><b>Edit entry — '+esc(mlabel)+'</b></div>'+
+      '<div class="sheet-sub">'+esc(whenTxt)+(r.synced?' · <span style="color:var(--ok)">synced</span>':' · <span class="muted">not synced</span>')+'</div>'+
+      rows+
+      '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button>'+
+      '<button class="btn primary" id="e-save">Save changes</button></div>'+
+      '<button class="btn danger block" id="e-del" style="margin-top:10px">Delete this entry</button>');
+    sheet.querySelector("#e-save").addEventListener("click",function(){
+      if(!isShift){
+        var eb=sheet.querySelector("#e-batch"); if(eb) r.batchNo=(eb.value||"").trim();
+        var eq=sheet.querySelector("#e-qual"); if(eq) r.quality=eq.value||"";
+      } else {
+        var es=sheet.querySelector("#e-shift"), ed=sheet.querySelector("#e-sdate");
+        if(es) r.shift=es.value; if(ed && ed.value) r.shiftDate=ed.value;
+      }
+      var ert=sheet.querySelector("#e-rt"); if(ert) r.runtimeMin=num(ert.value);
+      var ewk=sheet.querySelector("#e-wk"); if(ewk) r.workers=num(ewk.value);
+      var efw=sheet.querySelector("#e-fw"); if(efw) r.firewoodKg=num(efw.value);
+      var ekwh=sheet.querySelector("#e-kwh"); if(ekwh) r.kWh=num(ekwh.value);
+      var ewt=sheet.querySelector("#e-wt"); if(ewt) r.weightKg=num(ewt.value);
+      r.synced=false;                                   // re-push: upsert updates the DB row
+      save(); closeSheet(); render();
+      toast("Entry updated"+(syncTarget()?" — will re-sync":""),"ok");
+      scheduleAutoSync(500);
+    });
+    sheet.querySelector("#e-del").addEventListener("click",function(){ openDeleteRunSheet(id); });
+  }
+  function openDeleteRunSheet(id){
+    var r=findRun(id); if(!r){ closeSheet(); return; }
+    var mlabel=r.short||shortName(r.machineId)||r.machine||"";
+    var whenTxt=r.shift?(fmtDay(r.shiftDate)+' · '+r.shift):fmtDate(r.end);
+    openSheet('<div class="sheet-h"><b>Delete this entry?</b></div>'+
+      '<div class="sheet-sub"><span class="batchref">'+esc(mlabel)+'</span> · '+esc(whenTxt)+'</div>'+
+      '<div class="hint">Permanently removes this entry'+(r.synced?' from this device and the database':'')+'. This cannot be undone.</div>'+
+      '<div class="sheet-actions"><button class="btn ghost" data-act="close">Keep entry</button>'+
+      '<button class="btn danger" id="del-go">Yes, delete</button></div>');
+    sheet.querySelector("#del-go").addEventListener("click",function(){ deleteRun(id); });
+  }
+  function deleteRun(id){
+    var idx=-1, r=null;
+    for(var i=0;i<state.runs.length;i++){ if(state.runs[i].id===id){ r=state.runs[i]; idx=i; break; } }
+    if(idx<0){ closeSheet(); return; }
+    var wasSynced=!!r.synced;
+    state.runs.splice(idx,1);
+    if(wasSynced && syncTarget()==="supabase"){
+      state.pendingDeletes=state.pendingDeletes||[];
+      if(state.pendingDeletes.indexOf(id)<0) state.pendingDeletes.push(id);
+    }
+    save(); closeSheet(); render();
+    toast("Entry deleted","ok");
+    if(wasSynced) scheduleAutoSync(400);
   }
 
   function viewReports(){
@@ -1809,7 +1928,8 @@
       fields+hourField+
       (sw&&m.outWeight?'<div class="hint" style="margin-top:-4px">Output is weighed shiftwise in the Weigh tab after stopping'+(m.crumb?' — it adds to crumb stock.':'.')+'</div>':'')+
       '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button>'+
-      '<button class="btn primary" id="off-go">'+(m.kind==="autoclave"?"Log & unload":"Log run")+'</button></div>');
+      '<button class="btn primary" id="off-go">'+(m.kind==="autoclave"?"Log & unload":"Log run")+'</button></div>'+
+      '<button class="btn danger block" id="off-cancelload" style="margin-top:10px">Cancel this load (entered by mistake)</button>');
     sheet.querySelector("#off-go").addEventListener("click",function(){
       var f={};
       var elec=sheet.querySelector("#f-elec"), fw=sheet.querySelector("#f-fw"), wk=sheet.querySelector("#f-work"), wt=sheet.querySelector("#f-wt"), hr=sheet.querySelector("#f-hour");
@@ -1833,6 +1953,51 @@
       f.workers=wk?num(wk.value):null; if(wt) f.weightKg=num(wt.value);
       commitRun(mid,f);
     });
+    var clb=sheet.querySelector("#off-cancelload");
+    if(clb) clb.addEventListener("click",function(){ openCancelLoadSheet(mid); });
+  }
+
+  /* ---- Cancel a mistaken load (no run logged, crumb refunded) ---- */
+  function batchReferenced(bid){
+    if(!bid) return false;
+    if(state.runs && state.runs.some(function(r){ return r.batchId===bid; })) return true;
+    return MACHINES.some(function(mm){ var rr=state.machines[mm.id].running; return rr && rr.batchId===bid; });
+  }
+  function cancelLoad(mid){
+    var m=M(mid), st=state.machines[mid], run=st&&st.running;
+    if(!run){ closeSheet(); return; }
+    var coarseAC = m.kind==="autoclave" && run.shiftwise && run.line==="coarse";
+    var specialAC = m.kind==="autoclave" && !run.shiftwise;
+    if(coarseAC) addCrumb("bike", run.capacity||m.capacity);
+    if(specialAC) addCrumb("truck", m.capacity);
+    var bid = specialAC ? run.batchId : null;
+    st.running=null;                                   // discard the load (nothing committed)
+    if(bid && !batchReferenced(bid)){                  // remove the stray batch if unused
+      state.batches=state.batches.filter(function(b){ return b.id!==bid; });
+    }
+    save(); closeSheet(); render();
+    toast(m.short+" load cancelled — nothing logged","ok");
+    postStatus(mid,"idle");
+  }
+  function openCancelLoadSheet(mid){
+    var m=M(mid), run=state.machines[mid].running; if(!run){ closeSheet(); return; }
+    var sw=!!run.shiftwise, b=sw?null:batch(run.batchId);
+    var what = sw
+      ? (esc(run.shift)+' · '+esc(fmtDay(run.shiftDate))+(run.formulation?' · '+esc(run.formulation):''))
+      : (esc(b?b.no:'?')+(b&&b.formulation?' · '+esc(b.formulation):''));
+    var refund="";
+    if(m.kind==="autoclave"){
+      var store=(sw&&run.line==="coarse")?"bike":"truck";
+      var kg=(sw?run.capacity:m.capacity)||m.capacity;
+      refund='<div class="hint" style="margin-top:8px">'+kg+' kg of '+(store==="bike"?"bike (20#)":"truck (30#)")+' crumb will be returned to stock.</div>';
+    }
+    openSheet('<div class="sheet-h"><b>Cancel this load?</b></div>'+
+      '<div class="sheet-sub"><span class="batchref">'+esc(m.name)+'</span> · '+what+'</div>'+
+      '<div class="hint">Removes the load from '+esc(m.name)+'. Nothing is logged or sent — use only if it was entered by mistake.</div>'+
+      refund+
+      '<div class="sheet-actions"><button class="btn ghost" data-act="close">Keep loaded</button>'+
+      '<button class="btn danger" id="cl-go">Yes, cancel load</button></div>');
+    sheet.querySelector("#cl-go").addEventListener("click",function(){ cancelLoad(mid); });
   }
 
   function openWeighSheet(runId){
@@ -1933,6 +2098,7 @@
     if((t=e.target.closest("[data-weigh]"))){ openWeighSheet(t.getAttribute("data-weigh")); return; }
     if((t=e.target.closest("[data-pack]"))){ openPackSheet(t.getAttribute("data-pack")); return; }
     if((t=e.target.closest("[data-dispatch]"))){ openDispatchSheet(t.getAttribute("data-dispatch")); return; }
+    if((t=e.target.closest("[data-edit-run]"))){ openEditRun(t.getAttribute("data-edit-run")); return; }
     if((t=e.target.closest("[data-custdel]"))){ var cd=t.getAttribute("data-custdel");
       state.settings.customers=(state.settings.customers||[]).filter(function(c){ return c.code!==cd; }); save(); render(); return; }
     var a=e.target.closest("[data-act]"); if(!a) return;
