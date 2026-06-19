@@ -462,7 +462,7 @@
 
   /* ===================== state ===================== */
   var state;
-  function blank(){ return { v:1, settings:{syncUrl:"",supabaseUrl:SUPABASE_URL,supabaseKey:SUPABASE_ANON,device:"",role:"manager",pin:"",customers:[]}, sharedVersion:0, seq:{batch:0}, crumb:{truck:0,bike:0}, leftout:{}, batches:[], runs:[], dispatches:[], dispatchLoads:[], vehicles:[], drivers:[], maintenance:[], bearingLogs:[], conversions:[], shift:{date:todayISO(),name:autoShift(),supervisor:""}, machines:{} }; }
+  function blank(){ return { v:1, settings:{syncUrl:"",supabaseUrl:SUPABASE_URL,supabaseKey:SUPABASE_ANON,device:"",role:"manager",pin:"",customers:[]}, sharedVersion:0, seq:{batch:0}, crumb:{truck:0,bike:0}, leftout:{}, batches:[], runs:[], dispatches:[], dispatchLoads:[], vehicles:[], drivers:[], maintenance:[], bearingLogs:[], conversions:[], shift:{date:todayISO(),name:autoShift(),supervisor:""}, machines:{}, qualityTests:[] }; }
   function todayISO(){ var d=new Date(),m=d.getMonth()+1,day=d.getDate(); return d.getFullYear()+"-"+(m<10?"0":"")+m+"-"+(day<10?"0":"")+day; }
   function autoShift(){ var h=new Date().getHours(); return (h>=6&&h<18)?"Day":"Night"; }
   function curShift(){ if(!state.shift) state.shift={date:todayISO(),name:autoShift()}; return state.shift; }
@@ -510,6 +510,7 @@
     if(!s.vehicles||!s.vehicles.length) s.vehicles=SAMPLE_VEHICLES.slice();
     if(!s.drivers||!s.drivers.length) s.drivers=SAMPLE_DRIVERS.slice();
     if(!s.pendingLoadDeletes) s.pendingLoadDeletes=[];
+    if(!s.qualityTests) s.qualityTests=[];
     if(!s.seededDispatchDemo){
       s.seededDispatchDemo=true;
       var mk=function(grade,batchNo,sacks,kg,customer){
@@ -567,10 +568,11 @@
   function unsynced(){ return state.runs.filter(function(r){ return !r.synced && isComplete(r); }); }
   function unsyncedDispatches(){ return (state.dispatches||[]).filter(function(d){ return !d.synced; }); }
   function unsyncedLoads(){ return (state.dispatchLoads||[]).filter(function(l){ return !l.synced && !l.dummy; }); }
+  function unsyncedQuality(){ return (state.qualityTests||[]).filter(function(q){ return !q.synced; }); }
   function unsyncedMaintenance(){ return (state.maintenance||[]).filter(function(x){ return !x.synced; }); }
   function unsyncedBearings(){ return (state.bearingLogs||[]).filter(function(x){ return !x.synced; }); }
   function unsyncedConversions(){ return (state.conversions||[]).filter(function(x){ return !x.synced; }); }
-  function unsyncedCount(){ return unsynced().length + unsyncedDispatches().length + unsyncedMaintenance().length + unsyncedBearings().length + unsyncedConversions().length + unsyncedLoads().length + ((state.pendingDeletes||[]).length) + ((state.pendingLoadDeletes||[]).length); }
+  function unsyncedCount(){ return unsynced().length + unsyncedDispatches().length + unsyncedMaintenance().length + unsyncedBearings().length + unsyncedConversions().length + unsyncedLoads().length + unsyncedQuality().length + ((state.pendingDeletes||[]).length) + ((state.pendingLoadDeletes||[]).length); }
   function runningCount(){ var n=0; MACHINES.forEach(function(m){ if(state.machines[m.id].running) n++; }); return n; }
 
   function fmtElapsed(ms){ var s=Math.max(0,Math.floor(ms/1000));
@@ -979,6 +981,10 @@
   function convToSb(x){ return {
     id:x.id, device:sbStr(x.device), batch_no:sbStr(x.batchNo), from_quality:"Special", to_quality:"SuperFine",
     qty_kg:sbN(x.qty), stage:sbStr(x.stage), ts:sbISO(x.ts), shift_date:sbN(x.shiftDate), shift:sbN(x.shift), supervisor:sbN(x.supervisor) }; }
+  function qualToSb(q){ return {
+    id:q.id, device:sbStr(q.device), ts:sbISO(q.ts), kind:sbStr(q.kind), batch_no:sbN(q.batchNo),
+    shift_date:sbN(q.shiftDate), shift:sbN(q.shift), verdict:sbStr(q.verdict),
+    params:(q.params||[]), tester:sbN(q.tester), notes:sbN(q.notes) }; }
   function loadToSb(l){ return {
     id:l.id, device:sbStr(l.device), ts:sbISO(l.ts), customer:sbStr(l.customer),
     own_vehicle:(l.ownVehicle==null?null:!!l.ownVehicle), vehicle_no:sbStr(l.vehicleNo), driver:sbStr(l.driver),
@@ -1034,9 +1040,10 @@
     opts=opts||{}; var quiet=!!opts.auto;
     var pending=unsynced(), pendD=unsyncedDispatches(), pendM=unsyncedMaintenance(), pendB=unsyncedBearings(), pendC=unsyncedConversions();
     var pendL=unsyncedLoads();
+    var pendQ=unsyncedQuality();
     var pendDel=(state.pendingDeletes||[]).slice();
     var pendLDel=(state.pendingLoadDeletes||[]).slice();
-    if(!pending.length && !pendD.length && !pendM.length && !pendB.length && !pendC.length && !pendL.length && !pendDel.length && !pendLDel.length){ if(!quiet) toast("Nothing new to sync","ok"); return; }
+    if(!pending.length && !pendD.length && !pendM.length && !pendB.length && !pendC.length && !pendL.length && !pendQ.length && !pendDel.length && !pendLDel.length){ if(!quiet) toast("Nothing new to sync","ok"); return; }
     if(syncing) return; syncing=true; if(!quiet) render();
     var jobs=[];
     if(pending.length) jobs.push(sbPush("runs", pending.map(runToSb)).then(function(){ markSynced(state.runs, pending); }));
@@ -1044,6 +1051,7 @@
     if(pendM.length) jobs.push(sbPush("maintenance", pendM.map(maintToSb)).then(function(){ markSynced(state.maintenance, pendM); }));
     if(pendB.length) jobs.push(sbPush("bearing_logs", pendB.map(bearingToSb)).then(function(){ markSynced(state.bearingLogs, pendB); }));
     if(pendC.length) jobs.push(sbPush("conversions", pendC.map(convToSb)).then(function(){ markSynced(state.conversions, pendC); }));
+    if(pendQ.length) jobs.push(sbPush("quality_tests", pendQ.map(qualToSb)).then(function(){ markSynced(state.qualityTests, pendQ); }));
     if(pendL.length){
       var allItems=[]; pendL.forEach(function(l){ allItems=allItems.concat(loadItemsToSb(l)); });
       jobs.push(sbPush("dispatch_loads", pendL.map(loadToSb)).then(function(){
@@ -1056,7 +1064,7 @@
       state.pendingLoadDeletes=(state.pendingLoadDeletes||[]).filter(function(id){ return pendLDel.indexOf(id)<0; }); }));
     Promise.all(jobs).then(function(){
       state.lastSyncAt=Date.now(); syncing=false; store.write(JSON.stringify(state));
-      var n=pending.length+pendD.length+pendM.length+pendB.length+pendC.length+pendL.length+pendDel.length+pendLDel.length;
+      var n=pending.length+pendD.length+pendM.length+pendB.length+pendC.length+pendL.length+pendQ.length+pendDel.length+pendLDel.length;
       var sheetOpen=document.getElementById("sheet") && document.getElementById("sheet").classList.contains("show");
       if(!quiet){ render(); toast("Saved "+n+" record"+(n>1?"s":"")+" to the database","ok"); }
       else if(active==="settings" && !sheetOpen){ render(); }
@@ -1153,6 +1161,27 @@
         .then(function(res){ if(res.ok){ state.sharedVersion=newV; state.lastSharedBy=dev; state.lastSharedAt=iso; store.write(JSON.stringify(state)); } });
     }).then(function(){ sharedPushing=false; }).catch(function(){ sharedPushing=false; });
   }
+  /* QC results sync as individual records, merged by id — so a hold can't be lost
+     to a concurrent save (QC and a supervisor may be active at the same time). */
+  function pullQuality(){
+    if(syncTarget()!=="supabase") return;
+    var base=sharedBase(), key=sharedKey(); if(!base||!key) return;
+    fetch(base+"/rest/v1/quality_tests?select=*",{ headers:{ "apikey":key, "Authorization":"Bearer "+key } })
+      .then(function(r){ return r.ok?r.json():[]; }).then(function(rows){
+        if(!rows||!rows.length) return;
+        if(!state.qualityTests) state.qualityTests=[];
+        var have={}; state.qualityTests.forEach(function(q){ have[q.id]=1; });
+        var changed=false;
+        rows.forEach(function(row){
+          if(have[row.id]) return;
+          state.qualityTests.push({ id:row.id, device:row.device||"", ts:row.ts?+new Date(row.ts):Date.now(),
+            kind:row.kind, batchNo:row.batch_no, shiftDate:row.shift_date, shift:row.shift,
+            params:row.params||[], verdict:row.verdict, tester:row.tester||"", notes:row.notes||"", synced:true });
+          changed=true;
+        });
+        if(changed){ store.write(JSON.stringify(state)); if(!sheetIsOpen()) render(); }
+      }).catch(function(){});
+  }
 
   function syncSheet(opts){
     opts=opts||{}; var quiet=!!opts.auto;
@@ -1205,18 +1234,21 @@
     {id:"weigh",label:"Weigh",icon:'<path d="M12 3v3"/><path d="M5 6h14"/><path d="M5 6 2 14a4 4 0 0 0 6 0L5 6Z"/><path d="M19 6l-3 8a4 4 0 0 0 6 0l-3-8Z"/><path d="M9 20h6"/><path d="M12 6v14"/>'},
     {id:"packing",label:"Packing",icon:'<path d="M21 8 12 3 3 8v8l9 5 9-5Z"/><path d="M3 8l9 5 9-5"/><path d="M12 13v8"/>'},
     {id:"dispatch",label:"Dispatch",icon:'<path d="M1 3h13v10H1z"/><path d="M14 7h4l3 3v3h-7z"/><circle cx="6" cy="17" r="2"/><circle cx="17" cy="17" r="2"/>'},
+    {id:"quality",label:"Quality",icon:'<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>'},
     {id:"history",label:"History",icon:'<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 4v4h4"/><path d="M12 8v4l3 2"/>'},
     {id:"reports",label:"Reports",icon:'<path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M22 20H2"/>'}
   ];
 
   function allowedTabs(){
-    var sup=state.settings.role==="supervisor";
-    return TABS.filter(function(t){ return !(sup && (t.id==="reports"||t.id==="dispatch")); });
+    var role=state.settings.role;
+    if(role==="qc") return TABS.filter(function(t){ return t.id==="quality"; });
+    if(role==="supervisor") return TABS.filter(function(t){ return !(t.id==="reports"||t.id==="dispatch"||t.id==="quality"); });
+    return TABS; // manager: everything, including Quality, for oversight
   }
   function renderTabs(){
-    var pw=pendingWeigh().length, pp=pendingPack().length;
+    var pw=pendingWeigh().length, pp=pendingPack().length, pq=pendingQC();
     document.getElementById("tabs").innerHTML=allowedTabs().map(function(t){
-      var n=(t.id==="weigh")?pw:(t.id==="packing"?pp:0);
+      var n=(t.id==="weigh")?pw:(t.id==="packing"?pp:(t.id==="quality"?pq:0));
       var badge=(n>0)?'<i class="tabbadge">'+n+'</i>':'';
       return '<button data-tab="'+t.id+'" class="'+(active===t.id?"active":"")+'">'+badge+
         '<svg viewBox="0 0 24 24">'+t.icon+'</svg><span>'+t.label+'</span></button>';
@@ -1596,7 +1628,16 @@
     var loads=(state.dispatchLoads||[]).slice().sort(function(a,b){ return (b.ts||0)-(a.ts||0); });
     var head='<div class="view-head"><h1>Dispatch</h1><div class="meta">'+loads.length+' load'+(loads.length===1?'':'s')+'</div></div>';
     var newBtn='<button class="btn primary block" data-act="new-dispatch" style="margin-bottom:14px">+ New dispatch</button>';
-    if(!loads.length) return head+newBtn+empty('<path d="M1 3h13v10H1z"/><path d="M14 7h4l3 3v3h-7z"/><circle cx="6" cy="17" r="2"/><circle cx="17" cy="17" r="2"/>',
+    var hb=heldBatchMap(), hbKeys=Object.keys(hb), hc=heldCoarseList();
+    var warn="";
+    if(hbKeys.length || hc.length){
+      var parts=hbKeys.map(function(no){ return "Batch "+esc(no); }).concat(hc.map(function(t){ return "Coarse "+esc(fmtDay(t.shiftDate))+" "+esc(t.shift); }));
+      warn='<div class="panel" style="border:1px solid var(--err);background:rgba(220,60,60,.08);margin-bottom:14px">'+
+        '<div style="display:flex;gap:8px;align-items:flex-start"><span style="color:var(--err);font-size:18px;line-height:1">\u26a0</span>'+
+        '<div><b style="color:var(--err)">QC hold \u2014 marked unfit</b><div class="bhint" style="margin-top:3px">'+parts.join(" \u00b7 ")+'</div>'+
+        '<div class="hint" style="margin-top:4px">You can still dispatch these \u2014 check with QC and decide.</div></div></div></div>';
+    }
+    if(!loads.length) return head+newBtn+warn+empty('<path d="M1 3h13v10H1z"/><path d="M14 7h4l3 3v3h-7z"/><circle cx="6" cy="17" r="2"/><circle cx="17" cy="17" r="2"/>',
       "No dispatches yet","Tap \u201cNew dispatch\u201d, add the items going out, then pick the customer, vehicle and driver.");
     var cards=loads.map(function(l){
       var veh = l.ownVehicle ? (esc(l.vehicleNo||"our vehicle")+(l.driver?' \u00b7 '+esc(l.driver):'')) : (esc(l.vehicleNo||"hired")+' \u00b7 hired'+(l.driver?' \u00b7 '+esc(l.driver):''));
@@ -1609,7 +1650,7 @@
         '<div class="bhint">'+esc(grades)+'</div>'+
         '<div class="bhint">'+veh+' \u00b7 '+Math.round((l.totalKg||0)*100)/100+' kg \u00b7 '+fmtDate(l.ts)+'</div></div>';
     }).join("");
-    return head+newBtn+'<div class="stack">'+cards+'</div>';
+    return head+newBtn+warn+'<div class="stack">'+cards+'</div>';
   }
 
   /* ---------- multi-item dispatch builder (one customer / vehicle / driver) ---------- */
@@ -1628,10 +1669,13 @@
   }
   function renderDispatchBuilder(){
     var gradeOpts=DISPATCH_GRADES.map(function(g){ return '<option value="'+g+'">'+g+'</option>'; }).join("");
+    var hbMap=heldBatchMap();
     var itemsHtml = DD.items.length ? DD.items.map(function(it,i){
       var w=itemWeight(it), rf=DD.customer?rateFor(DD.customer,it.grade):null;
       var right = rf ? (rf.rate!=null ? fmtMoney(rf.rate*w)+' <small class="muted">@'+rf.rate+(rf.note?' '+rf.note:'')+'</small>' : '<small style="color:var(--err)">no rate</small>') : '<small class="muted">'+w+' kg</small>';
-      return '<div class="weighrow"><span><b>'+esc(it.grade)+'</b>'+(it.batchNo?' <span class="muted">'+esc(it.batchNo)+'</span>':'')+' \u00b7 '+(it.sacks!=null&&it.sacks!==""?esc(it.sacks)+' sacks \u00b7 ':'')+w+' kg</span>'+
+      var held = it.batchNo && hbMap[String(it.batchNo)];
+      var holdTag = held ? ' <span class="qchip" style="background:var(--err);color:#fff;font-size:9px">QC HOLD</span>' : '';
+      return '<div class="weighrow"'+(held?' style="border-left:3px solid var(--err);padding-left:8px"':'')+'><span><b>'+esc(it.grade)+'</b>'+(it.batchNo?' <span class="muted">'+esc(it.batchNo)+'</span>':'')+holdTag+' \u00b7 '+(it.sacks!=null&&it.sacks!==""?esc(it.sacks)+' sacks \u00b7 ':'')+w+' kg</span>'+
         '<span style="display:flex;align-items:center;gap:8px">'+right+'<button class="wdel" data-del-item="'+i+'" aria-label="remove">\u2715</button></span></div>';
     }).join("") : '<div class="hint" style="margin:4px 0 10px">No items yet. Add each grade going on this vehicle.</div>';
     var custBtns=CUSTOMERS.map(function(c){ return '<button class="pick'+(DD.customer===c?' sel':'')+'" data-pick-cust="'+esc(c)+'"><b>'+esc(c)+'</b></button>'; }).join("");
@@ -1681,12 +1725,23 @@
     var dtx=sheet.querySelector("#dl-drvtext"); if(dtx) dtx.addEventListener("input",function(){ DD.driver=dtx.value; });
     var sv=sheet.querySelector("#dl-save"); if(sv) sv.addEventListener("click",commitDispatchLoad);
   }
-  function commitDispatchLoad(){
+  function commitDispatchLoad(force){
     if(!DD.items.length){ toast("Add at least one item","warn"); return; }
     if(!DD.customer){ toast("Pick a customer","warn"); return; }
     if(DD.ownVehicle && !DD.vehicleNo){ toast("Pick the vehicle","warn"); return; }
     if(DD.ownVehicle && !DD.driver){ toast("Pick the driver for our vehicle","warn"); return; }
     if(!DD.ownVehicle && !DD.vehicleNo){ toast("Enter the vehicle number","warn"); return; }
+    var hbMap=heldBatchMap();
+    var heldNos=DD.items.filter(function(it){ return it.batchNo && hbMap[String(it.batchNo)]; }).map(function(it){ return it.batchNo; });
+    if(!force && heldNos.length){
+      openSheet('<div class="sheet-h"><span class="led" style="background:radial-gradient(circle at 35% 30%,#ffb3b3,var(--err));box-shadow:0 0 10px 1px var(--err)"></span><b>QC hold on this load</b></div>'+
+        '<div class="sheet-sub">Batch '+esc(heldNos.join(", "))+' was marked <b style="color:var(--err)">unfit</b> by QC. You can still dispatch \u2014 it\u2019s your call.</div>'+
+        '<div class="sheet-actions"><button class="btn ghost" id="qcd-back">Back</button>'+
+        '<button class="btn danger" id="qcd-go">Dispatch anyway</button></div>');
+      sheet.querySelector("#qcd-back").addEventListener("click",renderDispatchBuilder);
+      sheet.querySelector("#qcd-go").addEventListener("click",function(){ commitDispatchLoad(true); });
+      return;
+    }
     var items=DD.items.map(function(it){
       var w=itemWeight(it), rf=rateFor(DD.customer,it.grade);
       return { id:uid(), grade:it.grade, batchNo:it.batchNo||"", sacks:(it.sacks!=null?it.sacks:null), weightKg:Math.round(w*100)/100, rate:rf.rate, amount:(rf.rate!=null?Math.round(rf.rate*w*100)/100:0) };
@@ -1725,6 +1780,126 @@
     if(wasSynced && syncTarget()==="supabase"){ state.pendingLoadDeletes=state.pendingLoadDeletes||[]; if(state.pendingLoadDeletes.indexOf(id)<0) state.pendingLoadDeletes.push(id); }
     save(); closeSheet(); render(); toast("Dispatch deleted","ok");
     if(wasSynced) scheduleAutoSync(400);
+  }
+
+  /* ================= Quality control (QC) module ================= */
+  var QC_PARAM_SUGGEST=["Specific gravity","Mooney viscosity","Ash %","Acetone extract %","Tensile (MPa)","Elongation %","Hardness (Shore A)","Fineness / mesh","Moisture %","Contamination"];
+  function qcKeyCoarse(date,shift){ return (date||"")+"|"+(shift||""); }
+  function qcLatestBatch(no){
+    var arr=(state.qualityTests||[]).filter(function(q){ return q.kind==="batch" && String(q.batchNo)===String(no); });
+    if(!arr.length) return null; arr.sort(function(a,b){ return (b.ts||0)-(a.ts||0); }); return arr[0];
+  }
+  function qcLatestCoarse(date,shift){
+    var arr=(state.qualityTests||[]).filter(function(q){ return q.kind==="coarse" && (q.shiftDate||"")===(date||"") && (q.shift||"")===(shift||""); });
+    if(!arr.length) return null; arr.sort(function(a,b){ return (b.ts||0)-(a.ts||0); }); return arr[0];
+  }
+  function coarseShifts(){ var seen={}, out=[]; (state.runs||[]).forEach(function(r){ if(r.line==="coarse"){ var k=qcKeyCoarse(r.shiftDate,r.shift); if(!seen[k]){ seen[k]=1; out.push({ shiftDate:r.shiftDate, shift:r.shift, formulation:r.formulation||"", ts:r.end||r.ts||0 }); } } }); return out; }
+  function pendingQC(){ var n=0; (state.batches||[]).forEach(function(b){ if(!qcLatestBatch(b.no)) n++; }); coarseShifts().forEach(function(c){ if(!qcLatestCoarse(c.shiftDate,c.shift)) n++; }); return n; }
+  function heldBatchMap(){ var s={}; (state.qualityTests||[]).forEach(function(q){ if(q.kind==="batch"){ var t=qcLatestBatch(q.batchNo); if(t&&t.verdict==="hold") s[String(q.batchNo)]=t; } }); return s; }
+  function heldCoarseList(){ var seen={}, out=[]; (state.qualityTests||[]).forEach(function(q){ if(q.kind!=="coarse") return; var k=qcKeyCoarse(q.shiftDate,q.shift); if(seen[k]) return; seen[k]=1; var t=qcLatestCoarse(q.shiftDate,q.shift); if(t&&t.verdict==="hold") out.push(t); }); return out; }
+  function qcChip(t){
+    if(!t) return '<span class="qchip shift" style="background:var(--steel);color:#0e1a08">Untested</span>';
+    if(t.verdict==="hold") return '<span class="qchip" style="background:var(--err);color:#fff">HOLD · unfit</span>';
+    return '<span class="qchip" style="background:var(--ok);color:#06210a">Passed</span>';
+  }
+
+  function viewQuality(){
+    var batches=(state.batches||[]).slice().sort(function(a,b){ return (b.startedAt||0)-(a.startedAt||0); });
+    var shifts=coarseShifts().sort(function(a,b){ return (b.ts||0)-(a.ts||0); });
+    var head='<div class="view-head"><h1>Quality</h1><div class="meta">'+pendingQC()+' awaiting test</div></div>';
+    if(!batches.length && !shifts.length)
+      return head+empty('<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
+        "Nothing to test yet","Once a special batch is loaded or a coarse shift is recorded, it shows up here for you to log results.");
+    var out=head;
+    if(batches.length){
+      out+='<div class="sheet-label" style="margin:4px 2px 8px">Special batches</div><div class="stack">';
+      out+=batches.map(function(b){
+        var t=qcLatestBatch(b.no);
+        return '<div class="bcard" data-qc-batch="'+esc(b.no)+'" style="cursor:pointer">'+
+          '<div class="bhead"><div class="l"><span class="batchref" style="font-size:16px">'+esc(b.no)+'</span>'+
+            '<span class="formchip">'+esc(b.formulation||"")+'</span></div>'+qcChip(t)+'</div>'+
+          (t?'<div class="bhint">'+(t.tester?esc(t.tester)+' · ':'')+fmtDate(t.ts)+(t.params&&t.params.length?' · '+t.params.length+' readings':'')+(t.notes?' · '+esc(t.notes):'')+'</div>':'<div class="bhint">Tap to log test results</div>')+
+        '</div>';
+      }).join("")+'</div>';
+    }
+    if(shifts.length){
+      out+='<div class="sheet-label" style="margin:16px 2px 8px">Coarse shifts</div><div class="stack">';
+      out+=shifts.map(function(c){
+        var t=qcLatestCoarse(c.shiftDate,c.shift);
+        return '<div class="bcard" data-qc-coarse="'+esc(qcKeyCoarse(c.shiftDate,c.shift))+'" style="cursor:pointer">'+
+          '<div class="bhead"><div class="l"><span class="batchref" style="font-size:15px">'+esc(fmtDay(c.shiftDate))+'</span>'+
+            '<span class="qchip shift" style="background:var(--ember)">'+esc(c.shift)+'</span>'+(c.formulation?'<span class="formchip">'+esc(c.formulation)+'</span>':'')+'</div>'+qcChip(t)+'</div>'+
+          (t?'<div class="bhint">'+(t.tester?esc(t.tester)+' · ':'')+fmtDate(t.ts)+(t.notes?' · '+esc(t.notes):'')+'</div>':'<div class="bhint">Tap to log test results</div>')+
+        '</div>';
+      }).join("")+'</div>';
+    }
+    return out;
+  }
+
+  /* ---- QC test sheet (append-only; latest result is the current verdict) ---- */
+  var QT=null;
+  function openQcBatch(no){
+    var b=null; for(var i=0;i<(state.batches||[]).length;i++) if(String(state.batches[i].no)===String(no)){ b=state.batches[i]; break; }
+    var prev=qcLatestBatch(no);
+    QT={ kind:"batch", batchNo:no, label:"Batch "+no, sub:(b?b.formulation:"")||"",
+         params:(prev&&prev.params?JSON.parse(JSON.stringify(prev.params)):[]), verdict:(prev?prev.verdict:"pass"), tester:(prev?prev.tester:"")||"", notes:"" };
+    renderQcSheet();
+  }
+  function openQcCoarse(key){
+    var p=String(key).split("|"), date=p[0], shift=p[1];
+    var prev=qcLatestCoarse(date,shift);
+    QT={ kind:"coarse", shiftDate:date, shift:shift, label:"Coarse · "+fmtDay(date)+" "+shift, sub:"",
+         params:(prev&&prev.params?JSON.parse(JSON.stringify(prev.params)):[]), verdict:(prev?prev.verdict:"pass"), tester:(prev?prev.tester:"")||"", notes:"" };
+    renderQcSheet();
+  }
+  function renderQcSheet(){
+    var prev = QT.kind==="batch" ? qcLatestBatch(QT.batchNo) : qcLatestCoarse(QT.shiftDate,QT.shift);
+    var paramsHtml = QT.params.length ? QT.params.map(function(p,i){
+      return '<div class="weighrow"><span><b>'+esc(p.name)+'</b> · '+esc(p.value)+(p.unit?' '+esc(p.unit):'')+'</span>'+
+        '<button class="wdel" data-qp-del="'+i+'" aria-label="remove">\u2715</button></div>';
+    }).join("") : '<div class="hint" style="margin:4px 0 10px">No readings yet. Add each test parameter and its value.</div>';
+    var dl='<datalist id="qc-names">'+QC_PARAM_SUGGEST.map(function(n){ return '<option value="'+esc(n)+'">'; }).join("")+'</datalist>';
+    openSheet('<div class="sheet-h"><span class="led" style="background:radial-gradient(circle at 35% 30%,#bfe3ff,#3aa0ff);box-shadow:0 0 10px 1px #3aa0ff"></span><b>'+esc(QT.label)+'</b></div>'+
+      '<div class="sheet-sub">'+(QT.sub?esc(QT.sub)+' · ':'')+'Log the lab results, then mark Pass or Hold.'+(prev?' Last: '+(prev.verdict==="hold"?'HOLD':'Passed')+' '+esc(fmtDate(prev.ts)):'')+'</div>'+
+      dl+
+      '<div class="sheet-label">Test readings</div>'+paramsHtml+
+      '<div class="field-inline" style="align-items:stretch;margin-top:6px"><div class="field" style="margin-bottom:0;flex:1.3"><label>Parameter</label><input id="qp-name" list="qc-names" type="text" autocomplete="off" placeholder="e.g. Mooney viscosity"></div>'+
+        '<div class="field" style="margin-bottom:0"><label>Value</label><input id="qp-val" type="text" inputmode="decimal" placeholder="0"></div>'+
+        '<div class="field" style="margin-bottom:0;flex:.7"><label>Unit</label><input id="qp-unit" type="text" autocomplete="off" placeholder="opt."></div>'+
+        '<button class="btn elec" id="qp-add" style="flex:0 0 auto;align-self:flex-end">+ Add</button></div>'+
+      '<div class="sheet-label" style="margin-top:16px">Verdict</div>'+
+      '<div style="display:flex;gap:8px;margin-bottom:6px">'+
+        '<button class="pick'+(QT.verdict!=="hold"?' sel':'')+'" data-qc-verdict="pass" style="flex:1"><b>Pass</b><small>fit for dispatch</small></button>'+
+        '<button class="pick'+(QT.verdict==="hold"?' sel':'')+'" data-qc-verdict="hold" style="flex:1"><b>Hold</b><small>unfit \u2014 warn dispatch</small></button>'+
+      '</div>'+
+      '<div class="field-inline" style="margin-top:10px"><div class="field"><label>Tested by</label><input id="qc-tester" type="text" autocomplete="off" placeholder="QC name" value="'+esc(QT.tester||"")+'"></div></div>'+
+      '<div class="field"><label>Notes <span class="muted" style="text-transform:none;letter-spacing:0">opt.</span></label><textarea id="qc-notes" rows="2" placeholder="observations / reason for hold">'+esc(QT.notes||"")+'</textarea></div>'+
+      '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button>'+
+      '<button class="btn primary" id="qc-save">Save result</button></div>');
+    sheet.querySelector("#qp-add").addEventListener("click",function(){
+      var nm=(sheet.querySelector("#qp-name").value||"").trim();
+      var vl=(sheet.querySelector("#qp-val").value||"").trim();
+      var un=(sheet.querySelector("#qp-unit").value||"").trim();
+      if(!nm){ toast("Name the parameter","warn"); return; }
+      if(vl===""){ toast("Enter the value","warn"); return; }
+      QT.tester=(sheet.querySelector("#qc-tester").value||"").trim(); QT.notes=sheet.querySelector("#qc-notes").value||"";
+      QT.params.push({ name:nm, value:vl, unit:un }); renderQcSheet();
+    });
+    sheet.querySelectorAll("[data-qp-del]").forEach(function(el){ el.addEventListener("click",function(){ QT.params.splice(parseInt(el.getAttribute("data-qp-del"),10),1); renderQcSheet(); }); });
+    sheet.querySelectorAll("[data-qc-verdict]").forEach(function(el){ el.addEventListener("click",function(){ QT.tester=(sheet.querySelector("#qc-tester").value||"").trim(); QT.notes=sheet.querySelector("#qc-notes").value||""; QT.verdict=el.getAttribute("data-qc-verdict"); renderQcSheet(); }); });
+    sheet.querySelector("#qc-save").addEventListener("click",commitQcTest);
+  }
+  function commitQcTest(){
+    QT.tester=(sheet.querySelector("#qc-tester").value||"").trim();
+    QT.notes=sheet.querySelector("#qc-notes").value||"";
+    if(!QT.params.length && !QT.notes){ toast("Add at least one reading or a note","warn"); return; }
+    var rec={ id:uid(), device:state.settings.device||"", ts:Date.now(), kind:QT.kind,
+      batchNo:(QT.kind==="batch"?QT.batchNo:null), shiftDate:(QT.kind==="coarse"?QT.shiftDate:null), shift:(QT.kind==="coarse"?QT.shift:null),
+      params:QT.params.slice(), verdict:(QT.verdict==="hold"?"hold":"pass"), tester:QT.tester, notes:QT.notes, synced:false };
+    state.qualityTests.push(rec); QT=null;
+    save(); closeSheet(); render();
+    toast(rec.verdict==="hold"?"Marked HOLD \u2014 dispatch will be warned":"Result saved \u00b7 passed","ok");
+    scheduleAutoSync(500);
   }
 
   function viewHistory(){
@@ -1907,15 +2082,16 @@
 
   function viewSettings(){
     var u=unsyncedCount();
-    var sup=state.settings.role==="supervisor";
+    var role=state.settings.role||"manager", sup=role==="supervisor";
     var storeNote = lsOK ? "Data is saved on this device and works offline." :
       "Storage is blocked in this preview, so data lives only in memory. Save or install this file to keep data between sessions.";
     return '<div class="view-head"><h1>Settings</h1><div class="meta">device & sync</div></div>'+
 
       '<div class="panel"><div class="sheet-label" style="margin:0 0 10px">View mode for this device</div>'+
       '<div class="pickgrid">'+
-        '<button class="pick'+(!sup?' sel':'')+'" data-act="set-role" data-role="manager"><b>Manager</b><small>All tabs incl. Reports</small></button>'+
-        '<button class="pick'+(sup?' sel':'')+'" data-act="set-role" data-role="supervisor"><b>Supervisor</b><small>No Reports tab</small></button>'+
+        '<button class="pick'+(role==="manager"?' sel':'')+'" data-act="set-role" data-role="manager"><b>Manager</b><small>All tabs incl. Reports</small></button>'+
+        '<button class="pick'+(role==="supervisor"?' sel':'')+'" data-act="set-role" data-role="supervisor"><b>Supervisor</b><small>Floor entry · no Reports</small></button>'+
+        '<button class="pick'+(role==="qc"?' sel':'')+'" data-act="set-role" data-role="qc"><b>Quality (QC)</b><small>Only the Quality tab</small></button>'+
       '</div>'+
       '<div class="field" style="margin:14px 0 0"><label>Settings PIN <span class="muted" style="text-transform:none;letter-spacing:0">— optional, locks this screen</span></label>'+
       '<input id="set-pin" type="text" inputmode="numeric" autocomplete="off" placeholder="4–6 digits, blank = off" value="'+esc(state.settings.pin)+'" maxlength="6">'+
@@ -2350,7 +2526,9 @@
   }
 
   function render(){
-    if(state.settings.role==="supervisor" && (active==="reports"||active==="dispatch")) active="machines";
+    var role=state.settings.role;
+    if(role==="supervisor" && (active==="reports"||active==="dispatch"||active==="quality")) active="machines";
+    if(role==="qc" && active!=="quality" && active!=="settings") active="quality";
     renderTabs();
     var rc=runningCount(), el=document.getElementById("runcount");
     el.textContent=rc+" RUNNING"; el.className="runcount"+(rc?"":" zero");
@@ -2360,6 +2538,7 @@
     else if(active==="weigh") html=viewWeigh();
     else if(active==="packing") html=viewPacking();
     else if(active==="dispatch") html=viewDispatch();
+    else if(active==="quality") html=viewQuality();
     else if(active==="history") html=viewHistory();
     else if(active==="reports") html=viewReports();
     else if(active==="settings") html=viewSettings();
@@ -2394,6 +2573,8 @@
     if((t=e.target.closest("[data-weigh]"))){ openWeighSheet(t.getAttribute("data-weigh")); return; }
     if((t=e.target.closest("[data-pack]"))){ openPackSheet(t.getAttribute("data-pack")); return; }
     if((t=e.target.closest("[data-load]"))){ openLoadDetail(t.getAttribute("data-load")); return; }
+    if((t=e.target.closest("[data-qc-batch]"))){ openQcBatch(t.getAttribute("data-qc-batch")); return; }
+    if((t=e.target.closest("[data-qc-coarse]"))){ openQcCoarse(t.getAttribute("data-qc-coarse")); return; }
     if((t=e.target.closest("[data-edit-run]"))){ openEditRun(t.getAttribute("data-edit-run")); return; }
     if((t=e.target.closest("[data-custdel]"))){ var cd=t.getAttribute("data-custdel");
       state.settings.customers=(state.settings.customers||[]).filter(function(c){ return c.code!==cd; }); save(); render(); return; }
@@ -2466,7 +2647,7 @@
   // Smart auto-sync: periodic catch-up, on reconnect, and when the app regains focus.
   setInterval(autoSync, 120000);
   // Pull the shared master copy so each phone mirrors the others (skip while a sheet is open).
-  setInterval(function(){ if(!sheetIsOpen()) pullShared(); }, 20000);
+  setInterval(function(){ if(!sheetIsOpen()){ pullShared(); pullQuality(); } }, 20000);
   // Live status heartbeat: re-announce running machines so the monitor stays current.
   setInterval(postAllStatus, 60000);
   setTimeout(postAllStatus, 4000);
@@ -2476,11 +2657,11 @@
   // Auto shift-by-clock + refresh bearing-due warnings on the Machines screen.
   setInterval(function(){ refreshAutoShift(); if(active==="machines") render(); }, 60000);
   if(typeof window!=="undefined"){
-    window.addEventListener("online", function(){ scheduleAutoSync(1500); pullShared(); });
-    window.addEventListener("focus", function(){ scheduleAutoSync(1500); pullShared(); });
+    window.addEventListener("online", function(){ scheduleAutoSync(1500); pullShared(); pullQuality(); });
+    window.addEventListener("focus", function(){ scheduleAutoSync(1500); pullShared(); pullQuality(); });
   }
   if(typeof document!=="undefined"){
-    document.addEventListener("visibilitychange", function(){ if(!document.hidden){ scheduleAutoSync(1500); pullShared(); } });
+    document.addEventListener("visibilitychange", function(){ if(!document.hidden){ scheduleAutoSync(1500); pullShared(); pullQuality(); } });
   }
 
   /* toast */
@@ -2521,6 +2702,7 @@
         if(hasData) scheduleSharedPush();
       }
     }});
+    pullQuality();
   }, 1500);
   if("serviceWorker" in navigator){ try{ navigator.serviceWorker.register("sw.js"); }catch(e){} }
 })();
