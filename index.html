@@ -411,6 +411,33 @@
   var QUALITIES=["Special","SuperFine","Fine","Medium","DRC"];
   var SUPERVISORS=["Mathai","Rahul","Devanand"];
 
+  /* ===== Customers, grades & rate card (from the reclaim price list) ===== */
+  var DISPATCH_GRADES=["Special","SuperFine","Fine","Medium","Coarse","Sillsheet"];
+  var CUSTOMERS=["UNITED","TEE PEE","ALEXCO","AARSON","DOLPHIN","ESTEEM","ALEENA","EASTERN","VAJRA","JETLUX","VISHAL","CONSOSIUM","G.P.T","SUN","MAHIMA","PEINCHERIL","BLUE MOUNT","MS","MET CL"];
+  var PRICE_LIST={ Special:48, SuperFine:47, Fine:43, Medium:41, Coarse:36 };   // standard list rate / kg
+  var RATE_CARD={
+    "UNITED":{SuperFine:45,Fine:43,Coarse:34.4}, "TEE PEE":{Coarse:34.5}, "ALEXCO":{Fine:43,Coarse:34.5},
+    "AARSON":{Coarse:34.5}, "DOLPHIN":{Coarse:36}, "ESTEEM":{Coarse:36.5}, "ALEENA":{Fine:44.5,Coarse:35.5},
+    "EASTERN":{Special:48,SuperFine:47}, "VAJRA":{Medium:43}, "JETLUX":{Medium:42}, "VISHAL":{Special:48},
+    "CONSOSIUM":{SuperFine:46}, "G.P.T":{Fine:43,Coarse:34}, "SUN":{Special:48}, "MAHIMA":{Sillsheet:42},
+    "PEINCHERIL":{Coarse:34.5}, "BLUE MOUNT":{Coarse:34.5}, "MS":{Coarse:36}, "MET CL":{Coarse:36}
+  };
+  var RATE_NOTES={ "PEINCHERIL|Coarse":"ADV PYMT", "BLUE MOUNT|Coarse":"ADV PYMT" };
+  // rateFor: customer's negotiated rate if set, else the standard list price for that grade.
+  function rateFor(customer, grade){
+    var cc=RATE_CARD[customer]; var r=(cc&&cc[grade]!=null)?cc[grade]:null;
+    if(r!=null) return { rate:r, custom:true, note:RATE_NOTES[customer+"|"+grade]||"" };
+    if(PRICE_LIST[grade]!=null) return { rate:PRICE_LIST[grade], custom:false, note:"" };
+    return { rate:null, custom:false, note:"" };
+  }
+  var SAMPLE_VEHICLES=["KL-17-AB-1234","KL-17-CD-5678","KL-09-GG-3321"];   // own vehicles (editable later)
+  var SAMPLE_DRIVERS=["Biju","Rajan","Saji"];
+
+  /* Pre-filled cloud connection so a fresh phone install is connected on first open.
+     The anon key is public-by-design (read/write gated by row-level security). */
+  var SUPABASE_URL="https://xqdmxfjmmazfpmsvbnjx.supabase.co";
+  var SUPABASE_ANON="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhxZG14ZmptbWF6ZnBtc3Zibmp4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE2MzE2MDcsImV4cCI6MjA5NzIwNzYwN30.tjR30i3Cdaz-6S2tr-7s5gvvOz24rTK0KyxW47itC6s";
+
   // Formulations already defined in the costing workbook (Special line).
   // 2500-capacity autoclave (A) -> the 2500 specs; 2200 autoclaves (M/N/O) -> the 2200 spec.
   var FORMULATIONS=[
@@ -435,7 +462,7 @@
 
   /* ===================== state ===================== */
   var state;
-  function blank(){ return { v:1, settings:{syncUrl:"",supabaseUrl:"",supabaseKey:"",device:"",role:"manager",pin:"",customers:[]}, seq:{batch:0}, crumb:{truck:0,bike:0}, leftout:{}, batches:[], runs:[], dispatches:[], maintenance:[], bearingLogs:[], conversions:[], shift:{date:todayISO(),name:autoShift(),supervisor:""}, machines:{} }; }
+  function blank(){ return { v:1, settings:{syncUrl:"",supabaseUrl:SUPABASE_URL,supabaseKey:SUPABASE_ANON,device:"",role:"manager",pin:"",customers:[]}, sharedVersion:0, seq:{batch:0}, crumb:{truck:0,bike:0}, leftout:{}, batches:[], runs:[], dispatches:[], dispatchLoads:[], vehicles:[], drivers:[], maintenance:[], bearingLogs:[], conversions:[], shift:{date:todayISO(),name:autoShift(),supervisor:""}, machines:{} }; }
   function todayISO(){ var d=new Date(),m=d.getMonth()+1,day=d.getDate(); return d.getFullYear()+"-"+(m<10?"0":"")+m+"-"+(day<10?"0":"")+day; }
   function autoShift(){ var h=new Date().getHours(); return (h>=6&&h<18)?"Day":"Night"; }
   function curShift(){ if(!state.shift) state.shift={date:todayISO(),name:autoShift()}; return state.shift; }
@@ -479,13 +506,32 @@
     if(!s.bearingLogs) s.bearingLogs=[];
     if(!s.conversions) s.conversions=[];
     if(!s.pendingDeletes) s.pendingDeletes=[];
+    if(!s.dispatchLoads) s.dispatchLoads=[];
+    if(!s.vehicles||!s.vehicles.length) s.vehicles=SAMPLE_VEHICLES.slice();
+    if(!s.drivers||!s.drivers.length) s.drivers=SAMPLE_DRIVERS.slice();
+    if(!s.pendingLoadDeletes) s.pendingLoadDeletes=[];
+    if(!s.seededDispatchDemo){
+      s.seededDispatchDemo=true;
+      var mk=function(grade,batchNo,sacks,kg,customer){
+        var w=(kg!=null?kg:(sacks!=null?sacks*SACK_KG:0)); var rf=rateFor(customer,grade);
+        return { id:uid(), grade:grade, batchNo:batchNo||"", sacks:(sacks!=null?sacks:null), weightKg:w, rate:rf.rate, amount:(rf.rate!=null?Math.round(rf.rate*w*100)/100:0) };
+      };
+      var mkLoad=function(customer,own,veh,driver,items,agoMin){
+        var tKg=0,tAmt=0; items.forEach(function(it){ tKg+=(+it.weightKg||0); tAmt+=(+it.amount||0); });
+        return { id:uid(), device:"SAMPLE", ts:Date.now()-agoMin*60000, customer:customer, ownVehicle:own, vehicleNo:veh, driver:driver||"", supervisor:"Devanand", items:items, totalKg:Math.round(tKg*100)/100, totalAmount:Math.round(tAmt*100)/100, dummy:true, synced:true, createdAt:Date.now()-agoMin*60000 };
+      };
+      s.dispatchLoads.push(mkLoad("DOLPHIN",true,"KL-17-AB-1234","Biju",[ mk("Coarse","",120,null,"DOLPHIN"), mk("Special","9043",20,null,"DOLPHIN") ],180));
+      s.dispatchLoads.push(mkLoad("UNITED",false,"KL-43-TT-9090","",[ mk("SuperFine","",null,1000,"UNITED"), mk("Fine","",null,500,"UNITED"), mk("Coarse","",null,2000,"UNITED") ],95));
+      s.dispatchLoads.push(mkLoad("EASTERN",true,"KL-17-CD-5678","Rajan",[ mk("Special","",null,1500,"EASTERN"), mk("SuperFine","",null,800,"EASTERN") ],30));
+    }
     if(!s.leftout) s.leftout={};
     if(!s.shift) s.shift={date:todayISO(),name:autoShift(),supervisor:""};
     if(s.shift.supervisor==null) s.shift.supervisor="";
     if(!s.crumb) s.crumb={truck:0,bike:0};
     if(s.settings.autoSync==null) s.settings.autoSync=true;
-    if(s.settings.supabaseUrl==null) s.settings.supabaseUrl="";
-    if(s.settings.supabaseKey==null) s.settings.supabaseKey="";
+    if(!s.settings.supabaseUrl) s.settings.supabaseUrl=SUPABASE_URL;
+    if(!s.settings.supabaseKey) s.settings.supabaseKey=SUPABASE_ANON;
+    if(s.sharedVersion==null) s.sharedVersion=0;
     if(s.lastSyncAt==null) s.lastSyncAt=0;
     if(!s.seq) s.seq={batch:0};
     if(!s.batches) s.batches=[];
@@ -494,7 +540,7 @@
     MACHINES.forEach(function(m){ if(!s.machines[m.id]) s.machines[m.id]={running:null,down:null}; else if(s.machines[m.id].down===undefined) s.machines[m.id].down=null; });
     state=s;
   }
-  function save(){ store.write(JSON.stringify(state)); scheduleAutoSync(); scheduleLivePush(); }
+  function save(){ store.write(JSON.stringify(state)); scheduleAutoSync(); scheduleLivePush(); scheduleSharedPush(); }
   function uid(){ try{ if(crypto&&crypto.randomUUID) return crypto.randomUUID(); }catch(e){} return "r"+Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
 
   /* ===================== helpers ===================== */
@@ -520,10 +566,11 @@
   function pendingWeigh(){ return state.runs.filter(function(r){ return (r.needsWeigh||r.machineId==="R4") && (r.weightKg===""||r.weightKg==null); }); }
   function unsynced(){ return state.runs.filter(function(r){ return !r.synced && isComplete(r); }); }
   function unsyncedDispatches(){ return (state.dispatches||[]).filter(function(d){ return !d.synced; }); }
+  function unsyncedLoads(){ return (state.dispatchLoads||[]).filter(function(l){ return !l.synced && !l.dummy; }); }
   function unsyncedMaintenance(){ return (state.maintenance||[]).filter(function(x){ return !x.synced; }); }
   function unsyncedBearings(){ return (state.bearingLogs||[]).filter(function(x){ return !x.synced; }); }
   function unsyncedConversions(){ return (state.conversions||[]).filter(function(x){ return !x.synced; }); }
-  function unsyncedCount(){ return unsynced().length + unsyncedDispatches().length + unsyncedMaintenance().length + unsyncedBearings().length + unsyncedConversions().length + ((state.pendingDeletes||[]).length); }
+  function unsyncedCount(){ return unsynced().length + unsyncedDispatches().length + unsyncedMaintenance().length + unsyncedBearings().length + unsyncedConversions().length + unsyncedLoads().length + ((state.pendingDeletes||[]).length) + ((state.pendingLoadDeletes||[]).length); }
   function runningCount(){ var n=0; MACHINES.forEach(function(m){ if(state.machines[m.id].running) n++; }); return n; }
 
   function fmtElapsed(ms){ var s=Math.max(0,Math.floor(ms/1000));
@@ -932,6 +979,13 @@
   function convToSb(x){ return {
     id:x.id, device:sbStr(x.device), batch_no:sbStr(x.batchNo), from_quality:"Special", to_quality:"SuperFine",
     qty_kg:sbN(x.qty), stage:sbStr(x.stage), ts:sbISO(x.ts), shift_date:sbN(x.shiftDate), shift:sbN(x.shift), supervisor:sbN(x.supervisor) }; }
+  function loadToSb(l){ return {
+    id:l.id, device:sbStr(l.device), ts:sbISO(l.ts), customer:sbStr(l.customer),
+    own_vehicle:(l.ownVehicle==null?null:!!l.ownVehicle), vehicle_no:sbStr(l.vehicleNo), driver:sbStr(l.driver),
+    supervisor:sbStr(l.supervisor), total_kg:sbN(l.totalKg), total_amount:sbN(l.totalAmount) }; }
+  function loadItemsToSb(l){ return (l.items||[]).map(function(it){ return {
+    id:it.id, load_id:l.id, grade:sbStr(it.grade), batch_no:sbStr(it.batchNo),
+    sacks:sbN(it.sacks), weight_kg:sbN(it.weightKg), rate:sbN(it.rate), amount:sbN(it.amount) }; }); }
   function sbPush(table, rows){
     var base=(state.settings.supabaseUrl||"").trim().replace(/\/+$/,"");
     var key=(state.settings.supabaseKey||"").trim();
@@ -957,6 +1011,17 @@
       return true;
     });
   }
+  function sbDeleteId(table, id){
+    var base=(state.settings.supabaseUrl||"").trim().replace(/\/+$/,"");
+    var key=(state.settings.supabaseKey||"").trim();
+    return fetch(base+"/rest/v1/"+table+"?id=eq."+encodeURIComponent(id),{
+      method:"DELETE",
+      headers:{ "apikey":key, "Authorization":"Bearer "+key, "Prefer":"return=minimal" }
+    }).then(function(res){
+      if(!res.ok && res.status!==404) return res.text().then(function(t){ throw new Error("HTTP "+res.status+" "+(t||"").slice(0,120)); });
+      return true;
+    });
+  }
   function syncErr(e){
     var m=(e&&e.message)||"no connection";
     if(typeof location!=="undefined" && location.protocol==="file:")
@@ -968,8 +1033,10 @@
   function syncSupabase(opts){
     opts=opts||{}; var quiet=!!opts.auto;
     var pending=unsynced(), pendD=unsyncedDispatches(), pendM=unsyncedMaintenance(), pendB=unsyncedBearings(), pendC=unsyncedConversions();
+    var pendL=unsyncedLoads();
     var pendDel=(state.pendingDeletes||[]).slice();
-    if(!pending.length && !pendD.length && !pendM.length && !pendB.length && !pendC.length && !pendDel.length){ if(!quiet) toast("Nothing new to sync","ok"); return; }
+    var pendLDel=(state.pendingLoadDeletes||[]).slice();
+    if(!pending.length && !pendD.length && !pendM.length && !pendB.length && !pendC.length && !pendL.length && !pendDel.length && !pendLDel.length){ if(!quiet) toast("Nothing new to sync","ok"); return; }
     if(syncing) return; syncing=true; if(!quiet) render();
     var jobs=[];
     if(pending.length) jobs.push(sbPush("runs", pending.map(runToSb)).then(function(){ markSynced(state.runs, pending); }));
@@ -977,11 +1044,19 @@
     if(pendM.length) jobs.push(sbPush("maintenance", pendM.map(maintToSb)).then(function(){ markSynced(state.maintenance, pendM); }));
     if(pendB.length) jobs.push(sbPush("bearing_logs", pendB.map(bearingToSb)).then(function(){ markSynced(state.bearingLogs, pendB); }));
     if(pendC.length) jobs.push(sbPush("conversions", pendC.map(convToSb)).then(function(){ markSynced(state.conversions, pendC); }));
+    if(pendL.length){
+      var allItems=[]; pendL.forEach(function(l){ allItems=allItems.concat(loadItemsToSb(l)); });
+      jobs.push(sbPush("dispatch_loads", pendL.map(loadToSb)).then(function(){
+        return allItems.length?sbPush("dispatch_load_items", allItems):true;
+      }).then(function(){ markSynced(state.dispatchLoads, pendL); }));
+    }
     if(pendDel.length) jobs.push(Promise.all(pendDel.map(sbDeleteRun)).then(function(){
       state.pendingDeletes=(state.pendingDeletes||[]).filter(function(id){ return pendDel.indexOf(id)<0; }); }));
+    if(pendLDel.length) jobs.push(Promise.all(pendLDel.map(function(id){ return sbDeleteId("dispatch_loads", id); })).then(function(){
+      state.pendingLoadDeletes=(state.pendingLoadDeletes||[]).filter(function(id){ return pendLDel.indexOf(id)<0; }); }));
     Promise.all(jobs).then(function(){
       state.lastSyncAt=Date.now(); syncing=false; store.write(JSON.stringify(state));
-      var n=pending.length+pendD.length+pendM.length+pendB.length+pendC.length+pendDel.length;
+      var n=pending.length+pendD.length+pendM.length+pendB.length+pendC.length+pendL.length+pendDel.length+pendLDel.length;
       var sheetOpen=document.getElementById("sheet") && document.getElementById("sheet").classList.contains("show");
       if(!quiet){ render(); toast("Saved "+n+" record"+(n>1?"s":"")+" to the database","ok"); }
       else if(active==="settings" && !sheetOpen){ render(); }
@@ -1000,12 +1075,83 @@
     if(!base||!key) return;
     var snap; try{ snap=JSON.parse(JSON.stringify(state)); }catch(e){ return; }
     if(snap.settings){ snap.settings={ device:snap.settings.device||"", role:snap.settings.role||"", customers:snap.settings.customers||[] }; } // strip keys/pin
+    if(snap.dispatchLoads) snap.dispatchLoads=snap.dispatchLoads.filter(function(l){ return !l.dummy; }); // never mirror sample data
     var dev=(state.settings.device||"Tablet");
     try{
       fetch(base+"/rest/v1/live_state?on_conflict=device",{ method:"POST",
         headers:{ "apikey":key, "Authorization":"Bearer "+key, "Content-Type":"application/json", "Prefer":"resolution=merge-duplicates,return=minimal" },
         body:JSON.stringify([{ device:dev, state:snap, updated_at:new Date().toISOString() }]) }).catch(function(){});
     }catch(e){}
+  }
+
+  /* ===== shared master copy: every phone mirrors one cloud screen ===== */
+  var sharedApplying=false, sharedPushTimer=null, sharedPulling=false, sharedPushing=false;
+  function sharedBase(){ return (state.settings.supabaseUrl||"").trim().replace(/\/+$/,""); }
+  function sharedKey(){ return (state.settings.supabaseKey||"").trim(); }
+  function sheetIsOpen(){ var s=document.getElementById("sheet"); return !!(s && s.classList.contains("show")); }
+  function buildSharedDoc(){
+    var d; try{ d=JSON.parse(JSON.stringify(state)); }catch(e){ return null; }
+    delete d.settings;                                   // each phone keeps its own keys / pin / device name / role
+    delete d.sharedVersion; delete d.lastSharedBy; delete d.lastSharedAt;
+    delete d.pendingDeletes; delete d.pendingLoadDeletes; delete d.lastSyncAt;
+    if(d.dispatchLoads) d.dispatchLoads=d.dispatchLoads.filter(function(l){ return !l.dummy; });
+    return d;
+  }
+  function applyShared(doc){
+    if(!doc || typeof doc!=="object") return;
+    sharedApplying=true;
+    var keepSettings=state.settings;                     // preserve this device's own settings
+    var keepVer=state.sharedVersion, keepBy=state.lastSharedBy, keepAt=state.lastSharedAt;
+    var keepPendD=state.pendingDeletes, keepPendL=state.pendingLoadDeletes, keepLast=state.lastSyncAt;
+    Object.keys(doc).forEach(function(k){ state[k]=doc[k]; });
+    state.settings=keepSettings;
+    state.sharedVersion=keepVer; state.lastSharedBy=keepBy; state.lastSharedAt=keepAt;
+    state.pendingDeletes=keepPendD||[]; state.pendingLoadDeletes=keepPendL||[]; state.lastSyncAt=keepLast||0;
+    if(!state.machines) state.machines={};
+    MACHINES.forEach(function(m){ if(!state.machines[m.id]) state.machines[m.id]={running:null,down:null}; else if(state.machines[m.id].down===undefined) state.machines[m.id].down=null; });
+    if(!state.dispatchLoads) state.dispatchLoads=[];
+    store.write(JSON.stringify(state));
+    sharedApplying=false;
+  }
+  function pullShared(opts){
+    opts=opts||{};
+    if(syncTarget()!=="supabase"){ if(opts.cb) opts.cb(false); return; }
+    var base=sharedBase(), key=sharedKey(); if(!base||!key){ if(opts.cb) opts.cb(false); return; }
+    if(sharedPulling || sharedPushing){ if(opts.cb) opts.cb(false); return; }
+    sharedPulling=true;
+    fetch(base+"/rest/v1/shared_state?id=eq.plant&select=doc,version,updated_by,updated_at",{
+      headers:{ "apikey":key, "Authorization":"Bearer "+key }
+    }).then(function(r){ return r.ok?r.json():[]; }).then(function(rows){
+      sharedPulling=false;
+      var row=rows&&rows[0]; if(!row){ if(opts.cb) opts.cb(false); return; }
+      var rv=+row.version||0, lv=+state.sharedVersion||0;
+      if(rv>lv && row.doc && Object.keys(row.doc).length){
+        applyShared(row.doc);
+        state.sharedVersion=rv; state.lastSharedBy=row.updated_by||""; state.lastSharedAt=row.updated_at||"";
+        store.write(JSON.stringify(state));
+        if(!sheetIsOpen()) render();
+        if(opts.cb) opts.cb(true); return;
+      }
+      if(opts.cb) opts.cb(false);
+    }).catch(function(){ sharedPulling=false; if(opts.cb) opts.cb(false); });
+  }
+  function scheduleSharedPush(){ if(syncTarget()!=="supabase"||sharedApplying) return; if(sharedPushTimer) clearTimeout(sharedPushTimer); sharedPushTimer=setTimeout(pushShared, 2500); }
+  function pushShared(){
+    if(syncTarget()!=="supabase" || sharedApplying) return;
+    var base=sharedBase(), key=sharedKey(); if(!base||!key) return;
+    if(sharedPushing) return; sharedPushing=true;
+    var doc=buildSharedDoc(); if(!doc){ sharedPushing=false; return; }
+    fetch(base+"/rest/v1/shared_state?id=eq.plant&select=version",{
+      headers:{ "apikey":key, "Authorization":"Bearer "+key }
+    }).then(function(r){ return r.ok?r.json():[]; }).then(function(rows){
+      var rv=(rows&&rows[0])?(+rows[0].version||0):0;
+      var newV=Math.max(rv, +state.sharedVersion||0)+1;
+      var dev=(state.settings.device||"Tablet"), iso=new Date().toISOString();
+      return fetch(base+"/rest/v1/shared_state?on_conflict=id",{ method:"POST",
+        headers:{ "apikey":key, "Authorization":"Bearer "+key, "Content-Type":"application/json", "Prefer":"resolution=merge-duplicates,return=minimal" },
+        body:JSON.stringify([{ id:"plant", doc:doc, version:newV, updated_by:dev, updated_at:iso }]) })
+        .then(function(res){ if(res.ok){ state.sharedVersion=newV; state.lastSharedBy=dev; state.lastSharedAt=iso; store.write(JSON.stringify(state)); } });
+    }).then(function(){ sharedPushing=false; }).catch(function(){ sharedPushing=false; });
   }
 
   function syncSheet(opts){
@@ -1443,67 +1589,142 @@
     else toast("Saved "+sacks+" sacks · "+leftoutOut+" kg still to pack","ok");
   }
 
+  function fmtMoney(n){ if(n==null||n==="") return "—"; var x=Math.round((+n)*100)/100; try{ return "₹"+x.toLocaleString("en-IN"); }catch(e){ return "₹"+x; } }
+  function itemWeight(it){ return (it.weightKg!=null&&it.weightKg!=="")?(+it.weightKg):((it.sacks!=null&&it.sacks!=="")?(+it.sacks)*SACK_KG:0); }
+
   function viewDispatch(){
-    var items=dispatchableQ();
-    if(!items.length) return '<div class="view-head"><h1>Dispatch</h1></div>'+
-      empty('<path d="M1 3h13v10H1z"/><path d="M14 7h4l3 3v3h-7z"/><circle cx="6" cy="17" r="2"/><circle cx="17" cy="17" r="2"/>',
-        "Nothing ready to dispatch","Pack a weighed quality in the Packing tab and it shows up here with its available sacks.");
-    var cards=items.slice().reverse().map(function(r){
-      var b=batch(r.batchId); var avail=availSacksOf(r), packed=packedSacksOf(r), out=dispatchedSacksFor(r.batchId,r.quality);
-      var ds=(state.dispatches||[]).filter(function(d){ return d.batchId===r.batchId && (d.quality||"")===(r.quality||""); });
-      var lines=ds.slice().reverse().map(function(d){
-        return '<div class="dline"><span><b>'+esc(d.sacks)+'</b> sacks → '+esc(d.customerCode)+(d.driver?' · '+esc(d.driver):'')+'</span><span class="muted tnum">'+fmtClock(d.ts)+'</span></div>';
-      }).join("");
-      return '<div class="bcard"><div class="bhead"><div class="l"><span class="batchref" style="font-size:16px">'+esc(b?b.no:'?')+'</span>'+qchip(r.quality)+
-        '<span class="formchip">'+esc(b?b.formulation:'')+'</span></div><span class="bstate ready">'+avail+' sacks ready</span></div>'+
-        '<div class="bhint">'+packed+' packed · '+out+' dispatched · '+(avail*SACK_KG)+' kg available</div>'+
-        (lines?'<div class="dlist">'+lines+'</div>':'')+
-        '<button class="btn primary block" style="margin-top:11px" data-dispatch="'+r.id+'">+ Dispatch '+esc(r.quality)+'</button></div>';
+    var loads=(state.dispatchLoads||[]).slice().sort(function(a,b){ return (b.ts||0)-(a.ts||0); });
+    var head='<div class="view-head"><h1>Dispatch</h1><div class="meta">'+loads.length+' load'+(loads.length===1?'':'s')+'</div></div>';
+    var newBtn='<button class="btn primary block" data-act="new-dispatch" style="margin-bottom:14px">+ New dispatch</button>';
+    if(!loads.length) return head+newBtn+empty('<path d="M1 3h13v10H1z"/><path d="M14 7h4l3 3v3h-7z"/><circle cx="6" cy="17" r="2"/><circle cx="17" cy="17" r="2"/>',
+      "No dispatches yet","Tap \u201cNew dispatch\u201d, add the items going out, then pick the customer, vehicle and driver.");
+    var cards=loads.map(function(l){
+      var veh = l.ownVehicle ? (esc(l.vehicleNo||"our vehicle")+(l.driver?' \u00b7 '+esc(l.driver):'')) : (esc(l.vehicleNo||"hired")+' \u00b7 hired'+(l.driver?' \u00b7 '+esc(l.driver):''));
+      var grades = (l.items||[]).map(function(it){ return esc(it.grade); }).join(", ");
+      return '<div class="bcard" data-load="'+esc(l.id)+'" style="cursor:pointer">'+
+        '<div class="bhead"><div class="l"><span class="batchref" style="font-size:15px">'+esc(l.customer)+'</span>'+
+          (l.dummy?'<span class="qchip shift" style="background:var(--steel);color:#0e1a08">SAMPLE</span>':'')+
+          '<span class="formchip">'+(l.items||[]).length+' item'+((l.items||[]).length===1?'':'s')+'</span></div>'+
+          '<span class="bstate ready" style="background:none;color:var(--ok)">'+fmtMoney(l.totalAmount)+'</span></div>'+
+        '<div class="bhint">'+esc(grades)+'</div>'+
+        '<div class="bhint">'+veh+' \u00b7 '+Math.round((l.totalKg||0)*100)/100+' kg \u00b7 '+fmtDate(l.ts)+'</div></div>';
     }).join("");
-    return '<div class="view-head"><h1>Dispatch</h1><div class="meta">'+(state.dispatches||[]).length+' loads</div></div><div class="stack">'+cards+'</div>';
+    return head+newBtn+'<div class="stack">'+cards+'</div>';
   }
 
-  function openDispatchSheet(runId){
-    var r=weighRow(runId); if(!r) return; var b=batch(r.batchId); if(!b) return;
-    var avail=availSacksOf(r);
-    var cs=state.settings.customers||[];
-    if(!cs.length){
-      openSheet('<div class="sheet-h"><b>No customers yet</b></div>'+
-        '<div class="sheet-sub">Add customer codes and their selling price in Settings first — that\'s what lets us track profit per batch.</div>'+
-        '<div class="sheet-actions"><button class="btn ghost" data-act="close">Close</button>'+
-        '<button class="btn primary" data-act="go-customers">Go to Settings</button></div>');
-      return;
-    }
-    var picks={ code:null };
-    var custBtns=cs.map(function(c){
-      return '<button class="pick" data-pick-cust="'+esc(c.code)+'"><b>'+esc(c.code)+'</b><small>'+(c.name?esc(c.name)+' · ':'')+'₹'+esc(c.price)+'/kg</small></button>';
-    }).join("");
-    openSheet('<div class="sheet-h"><span class="led" style="background:radial-gradient(circle at 35% 30%,#c8f0a0,var(--amber));box-shadow:0 0 10px 1px var(--amber)"></span><b>Dispatch '+esc(b.no)+' · '+esc(r.quality)+'</b></div>'+
-      '<div class="sheet-sub">'+avail+' sacks available ('+(avail*SACK_KG)+' kg) · '+esc(b.formulation)+'</div>'+
-      '<div class="sheet-label">Customer</div><div class="pickgrid">'+custBtns+'</div>'+
-      '<div class="field-inline" style="margin-top:16px"><div class="field"><label>Sacks dispatched</label><input id="d-sacks" type="number" inputmode="numeric" placeholder="0 / '+avail+'"></div>'+
-      '<div class="field"><label>Driver</label><input id="d-driver" type="text" autocomplete="off" placeholder="Driver / vehicle"></div></div>'+
-      '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button>'+
-      '<button class="btn primary" id="d-go">Log dispatch</button></div>');
-    function sel(grp,one){ grp.forEach(function(g){ g.classList.remove("sel"); }); one.classList.add("sel"); }
-    sheet.querySelectorAll("[data-pick-cust]").forEach(function(el){ el.addEventListener("click",function(){ picks.code=el.getAttribute("data-pick-cust"); sel(sheet.querySelectorAll("[data-pick-cust]"),el); }); });
-    sheet.querySelector("#d-go").addEventListener("click",function(){
-      commitDispatch(r,{ code:picks.code, sacks:num(sheet.querySelector("#d-sacks").value), driver:(sheet.querySelector("#d-driver").value||"").trim() });
-    });
+  /* ---------- multi-item dispatch builder (one customer / vehicle / driver) ---------- */
+  var DD=null;
+  function openDispatchBuilder(){
+    DD={ items:[], customer:null, ownVehicle:true, vehicleNo:(state.vehicles&&state.vehicles[0])||"", driver:"" };
+    renderDispatchBuilder();
   }
-  function commitDispatch(r, f){
-    var b=batch(r.batchId); if(!b) return;
-    if(!f.code){ toast("Pick a customer","warn"); return; }
-    if(f.sacks==null||f.sacks<=0){ toast("Enter sacks dispatched","warn"); return; }
-    var avail=availSacksOf(r);
-    if(f.sacks>avail){ toast("Only "+avail+" sacks available","warn"); return; }
-    if(!f.driver){ toast("Enter the driver","warn"); return; }
-    var c=customer(f.code), ts=Date.now();
-    var rec={ id:uid(), device:state.settings.device||"", ts:ts, batchId:b.id, batchNo:b.no, formulation:b.formulation,
-      customerCode:f.code, customerName:c?c.name:"", price:c?c.price:"", sacks:f.sacks,
-      weightKg:f.sacks*SACK_KG, driver:f.driver, quality:r.quality||"", synced:false };
-    state.dispatches.push(rec); b.customerCode=f.code;
-    save(); closeSheet(); render(); toast("Dispatched "+f.sacks+" sacks · "+b.no+" "+r.quality+" → "+f.code,"ok");
+  function ddTotals(){
+    var kg=0, amt=0, missing=false;
+    DD.items.forEach(function(it){
+      var w=itemWeight(it), rf=DD.customer?rateFor(DD.customer,it.grade):{rate:null};
+      kg+=w; if(rf.rate!=null) amt+=rf.rate*w; else if(DD.customer) missing=true;
+    });
+    return { kg:Math.round(kg*100)/100, amt:Math.round(amt*100)/100, missing:missing };
+  }
+  function renderDispatchBuilder(){
+    var gradeOpts=DISPATCH_GRADES.map(function(g){ return '<option value="'+g+'">'+g+'</option>'; }).join("");
+    var itemsHtml = DD.items.length ? DD.items.map(function(it,i){
+      var w=itemWeight(it), rf=DD.customer?rateFor(DD.customer,it.grade):null;
+      var right = rf ? (rf.rate!=null ? fmtMoney(rf.rate*w)+' <small class="muted">@'+rf.rate+(rf.note?' '+rf.note:'')+'</small>' : '<small style="color:var(--err)">no rate</small>') : '<small class="muted">'+w+' kg</small>';
+      return '<div class="weighrow"><span><b>'+esc(it.grade)+'</b>'+(it.batchNo?' <span class="muted">'+esc(it.batchNo)+'</span>':'')+' \u00b7 '+(it.sacks!=null&&it.sacks!==""?esc(it.sacks)+' sacks \u00b7 ':'')+w+' kg</span>'+
+        '<span style="display:flex;align-items:center;gap:8px">'+right+'<button class="wdel" data-del-item="'+i+'" aria-label="remove">\u2715</button></span></div>';
+    }).join("") : '<div class="hint" style="margin:4px 0 10px">No items yet. Add each grade going on this vehicle.</div>';
+    var custBtns=CUSTOMERS.map(function(c){ return '<button class="pick'+(DD.customer===c?' sel':'')+'" data-pick-cust="'+esc(c)+'"><b>'+esc(c)+'</b></button>'; }).join("");
+    var vehSection;
+    if(DD.ownVehicle){
+      var vopts='<option value="">\u2014 pick vehicle \u2014</option>'+(state.vehicles||[]).map(function(v){ return '<option value="'+esc(v)+'"'+(DD.vehicleNo===v?' selected':'')+'>'+esc(v)+'</option>'; }).join("");
+      var dopts='<option value="">\u2014 pick driver \u2014</option>'+(state.drivers||[]).map(function(d){ return '<option value="'+esc(d)+'"'+(DD.driver===d?' selected':'')+'>'+esc(d)+'</option>'; }).join("");
+      vehSection='<div class="field-inline"><div class="field"><label>Our vehicle</label><select id="dl-veh">'+vopts+'</select></div>'+
+        '<div class="field"><label>Driver</label><select id="dl-drv">'+dopts+'</select></div></div>';
+    } else {
+      vehSection='<div class="field-inline"><div class="field"><label>Vehicle number</label><input id="dl-vehno" type="text" autocomplete="off" placeholder="e.g. KL-43-TT-9090" value="'+esc(DD.vehicleNo||"")+'"></div>'+
+        '<div class="field"><label>Driver <span class="muted" style="text-transform:none;letter-spacing:0">opt.</span></label><input id="dl-drvtext" type="text" autocomplete="off" placeholder="driver name" value="'+esc(DD.driver||"")+'"></div></div>';
+    }
+    var t=ddTotals();
+    var canSave = DD.items.length>0 && DD.customer && (DD.ownVehicle ? !!DD.vehicleNo : true);
+    openSheet('<div class="sheet-h"><span class="led" style="background:radial-gradient(circle at 35% 30%,#c8f0a0,var(--amber));box-shadow:0 0 10px 1px var(--amber)"></span><b>New dispatch</b></div>'+
+      '<div class="sheet-sub">One customer, one vehicle, one driver \u2014 any mix of grades.</div>'+
+      '<div class="sheet-label">Items</div>'+itemsHtml+
+      '<div class="field-inline" style="align-items:stretch;margin-top:6px"><div class="field" style="margin-bottom:0"><label>Grade</label><select id="di-grade">'+gradeOpts+'</select></div>'+
+        '<div class="field" style="margin-bottom:0"><label>Batch <span class="muted" style="text-transform:none;letter-spacing:0">opt.</span></label><input id="di-batch" type="text" autocomplete="off" placeholder="\u2014"></div></div>'+
+      '<div class="field-inline" style="align-items:stretch"><div class="field" style="margin-bottom:0"><label>Sacks</label><input id="di-sacks" type="number" inputmode="numeric" placeholder="0"></div>'+
+        '<div class="field" style="margin-bottom:0"><label>or Weight</label><div class="num-suffix"><input id="di-weight" type="number" inputmode="decimal" placeholder="kg"><span class="sfx">kg</span></div></div>'+
+        '<button class="btn elec" id="di-add" style="flex:0 0 auto;align-self:flex-end">+ Add</button></div>'+
+      '<div class="hint" style="margin-top:-2px">1 sack = '+SACK_KG+' kg. Enter sacks or a direct weight.</div>'+
+      '<div class="sheet-label" style="margin-top:16px">Customer</div><div class="pickgrid">'+custBtns+'</div>'+
+      '<div class="sheet-label" style="margin-top:16px">Vehicle</div>'+
+      '<div style="display:flex;gap:8px;margin-bottom:10px">'+
+        '<button class="pick'+(DD.ownVehicle?' sel':'')+'" data-veh-mode="own" style="flex:1">Our vehicle</button>'+
+        '<button class="pick'+(!DD.ownVehicle?' sel':'')+'" data-veh-mode="hired" style="flex:1">Hired / customer</button></div>'+
+      vehSection+
+      (DD.customer?'<div class="ro" style="margin-top:14px"><span class="k">Total</span><span class="v" style="color:var(--ok)">'+t.kg+' kg \u00b7 '+fmtMoney(t.amt)+(t.missing?' <small style="color:var(--err)">(some grades have no rate)</small>':'')+'</span></div>':'<div class="hint" style="margin-top:12px">Pick a customer to price the load.</div>')+
+      '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button>'+
+      '<button class="btn primary" id="dl-save"'+(canSave?'':' disabled style="opacity:.5"')+'>Save dispatch</button></div>');
+    sheet.querySelector("#di-add").addEventListener("click",function(){
+      var g=sheet.querySelector("#di-grade").value, bn=(sheet.querySelector("#di-batch").value||"").trim();
+      var sk=num(sheet.querySelector("#di-sacks").value), wt=num(sheet.querySelector("#di-weight").value);
+      if((sk==null||sk<=0) && (wt==null||wt<=0)){ toast("Enter sacks or weight","warn"); return; }
+      DD.items.push({ grade:g, batchNo:bn, sacks:(sk!=null?sk:null), weightKg:(wt!=null?wt:null) });
+      renderDispatchBuilder();
+    });
+    sheet.querySelectorAll("[data-del-item]").forEach(function(el){ el.addEventListener("click",function(){ DD.items.splice(parseInt(el.getAttribute("data-del-item"),10),1); renderDispatchBuilder(); }); });
+    sheet.querySelectorAll("[data-pick-cust]").forEach(function(el){ el.addEventListener("click",function(){ DD.customer=el.getAttribute("data-pick-cust"); renderDispatchBuilder(); }); });
+    sheet.querySelectorAll("[data-veh-mode]").forEach(function(el){ el.addEventListener("click",function(){ var own=(el.getAttribute("data-veh-mode")==="own"); if(own!==DD.ownVehicle){ DD.ownVehicle=own; DD.vehicleNo=own?((state.vehicles&&state.vehicles[0])||""):""; DD.driver=""; } renderDispatchBuilder(); }); });
+    var vsel=sheet.querySelector("#dl-veh"); if(vsel) vsel.addEventListener("change",function(){ DD.vehicleNo=vsel.value; });
+    var dsel=sheet.querySelector("#dl-drv"); if(dsel) dsel.addEventListener("change",function(){ DD.driver=dsel.value; });
+    var vno=sheet.querySelector("#dl-vehno"); if(vno) vno.addEventListener("input",function(){ DD.vehicleNo=vno.value; });
+    var dtx=sheet.querySelector("#dl-drvtext"); if(dtx) dtx.addEventListener("input",function(){ DD.driver=dtx.value; });
+    var sv=sheet.querySelector("#dl-save"); if(sv) sv.addEventListener("click",commitDispatchLoad);
+  }
+  function commitDispatchLoad(){
+    if(!DD.items.length){ toast("Add at least one item","warn"); return; }
+    if(!DD.customer){ toast("Pick a customer","warn"); return; }
+    if(DD.ownVehicle && !DD.vehicleNo){ toast("Pick the vehicle","warn"); return; }
+    if(DD.ownVehicle && !DD.driver){ toast("Pick the driver for our vehicle","warn"); return; }
+    if(!DD.ownVehicle && !DD.vehicleNo){ toast("Enter the vehicle number","warn"); return; }
+    var items=DD.items.map(function(it){
+      var w=itemWeight(it), rf=rateFor(DD.customer,it.grade);
+      return { id:uid(), grade:it.grade, batchNo:it.batchNo||"", sacks:(it.sacks!=null?it.sacks:null), weightKg:Math.round(w*100)/100, rate:rf.rate, amount:(rf.rate!=null?Math.round(rf.rate*w*100)/100:0) };
+    });
+    var tKg=0,tAmt=0; items.forEach(function(it){ tKg+=(+it.weightKg||0); tAmt+=(+it.amount||0); });
+    var load={ id:uid(), device:state.settings.device||"", ts:Date.now(), customer:DD.customer, ownVehicle:!!DD.ownVehicle,
+      vehicleNo:DD.vehicleNo||"", driver:DD.driver||"", supervisor:curShift().supervisor||"",
+      items:items, totalKg:Math.round(tKg*100)/100, totalAmount:Math.round(tAmt*100)/100, dummy:false, synced:false, createdAt:Date.now() };
+    state.dispatchLoads.push(load); DD=null;
+    save(); closeSheet(); render(); toast("Dispatch saved \u00b7 "+load.customer+" \u00b7 "+fmtMoney(load.totalAmount),"ok");
+    scheduleAutoSync(600);
+  }
+  function openLoadDetail(id){
+    var l=null; for(var i=0;i<(state.dispatchLoads||[]).length;i++) if(state.dispatchLoads[i].id===id){ l=state.dispatchLoads[i]; break; }
+    if(!l){ closeSheet(); return; }
+    var rows=(l.items||[]).map(function(it){
+      return '<div class="weighrow"><span><b>'+esc(it.grade)+'</b>'+(it.batchNo?' <span class="muted">'+esc(it.batchNo)+'</span>':'')+' \u00b7 '+(it.sacks!=null?esc(it.sacks)+' sacks \u00b7 ':'')+Math.round((+it.weightKg||0)*100)/100+' kg</span>'+
+        '<span>'+(it.rate!=null?fmtMoney(it.amount)+' <small class="muted">@'+it.rate+'</small>':'<small style="color:var(--err)">no rate</small>')+'</span></div>';
+    }).join("");
+    var veh = l.ownVehicle ? (esc(l.vehicleNo||"our vehicle")+(l.driver?' \u00b7 '+esc(l.driver):'')+' <span class="muted">(our vehicle)</span>') : (esc(l.vehicleNo||"hired")+(l.driver?' \u00b7 '+esc(l.driver):'')+' <span class="muted">(hired)</span>');
+    openSheet('<div class="sheet-h"><b>'+esc(l.customer)+(l.dummy?' \u00b7 SAMPLE':'')+'</b></div>'+
+      '<div class="sheet-sub">'+veh+' \u00b7 '+fmtDate(l.ts)+(l.supervisor?' \u00b7 '+esc(l.supervisor):'')+'</div>'+
+      '<div class="weighlist">'+rows+'</div>'+
+      '<div class="ro" style="margin-top:12px"><span class="k">Total</span><span class="v" style="color:var(--ok)">'+Math.round((l.totalKg||0)*100)/100+' kg \u00b7 '+fmtMoney(l.totalAmount)+'</span></div>'+
+      '<div class="ro" style="margin-bottom:8px"><span class="k">Synced</span><span class="v">'+(l.dummy?'sample \u2014 not sent':(l.synced?'yes':'pending'))+'</span></div>'+
+      '<div class="sheet-actions"><button class="btn ghost" data-act="close">Close</button>'+
+      '<button class="btn danger" data-del-load="'+esc(l.id)+'">Delete</button></div>');
+    var db=sheet.querySelector("[data-del-load]"); if(db) db.addEventListener("click",function(){ deleteLoad(l.id); });
+  }
+  function deleteLoad(id){
+    var idx=-1, l=null;
+    for(var i=0;i<(state.dispatchLoads||[]).length;i++) if(state.dispatchLoads[i].id===id){ l=state.dispatchLoads[i]; idx=i; break; }
+    if(idx<0){ closeSheet(); return; }
+    var wasSynced=!!l.synced && !l.dummy;
+    state.dispatchLoads.splice(idx,1);
+    if(wasSynced && syncTarget()==="supabase"){ state.pendingLoadDeletes=state.pendingLoadDeletes||[]; if(state.pendingLoadDeletes.indexOf(id)<0) state.pendingLoadDeletes.push(id); }
+    save(); closeSheet(); render(); toast("Dispatch deleted","ok");
+    if(wasSynced) scheduleAutoSync(400);
   }
 
   function viewHistory(){
@@ -2172,13 +2393,14 @@
     if((t=e.target.closest("[data-machine]"))){ openMachineSheet(t.getAttribute("data-machine")); return; }
     if((t=e.target.closest("[data-weigh]"))){ openWeighSheet(t.getAttribute("data-weigh")); return; }
     if((t=e.target.closest("[data-pack]"))){ openPackSheet(t.getAttribute("data-pack")); return; }
-    if((t=e.target.closest("[data-dispatch]"))){ openDispatchSheet(t.getAttribute("data-dispatch")); return; }
+    if((t=e.target.closest("[data-load]"))){ openLoadDetail(t.getAttribute("data-load")); return; }
     if((t=e.target.closest("[data-edit-run]"))){ openEditRun(t.getAttribute("data-edit-run")); return; }
     if((t=e.target.closest("[data-custdel]"))){ var cd=t.getAttribute("data-custdel");
       state.settings.customers=(state.settings.customers||[]).filter(function(c){ return c.code!==cd; }); save(); render(); return; }
     var a=e.target.closest("[data-act]"); if(!a) return;
     var act=a.getAttribute("data-act");
     if(act==="settings"){ openSettings(); }
+    else if(act==="new-dispatch"){ openDispatchBuilder(); }
     else if(act==="go-customers"){ closeSheet(); active="settings"; render(); setTimeout(function(){ var el=document.getElementById("cust-add"); if(el) el.scrollIntoView({block:"center"}); },60); }
     else if(act==="add-customer"){
       var cc=(document.getElementById("cust-code").value||"").trim().toUpperCase();
@@ -2243,6 +2465,8 @@
 
   // Smart auto-sync: periodic catch-up, on reconnect, and when the app regains focus.
   setInterval(autoSync, 120000);
+  // Pull the shared master copy so each phone mirrors the others (skip while a sheet is open).
+  setInterval(function(){ if(!sheetIsOpen()) pullShared(); }, 20000);
   // Live status heartbeat: re-announce running machines so the monitor stays current.
   setInterval(postAllStatus, 60000);
   setTimeout(postAllStatus, 4000);
@@ -2252,11 +2476,11 @@
   // Auto shift-by-clock + refresh bearing-due warnings on the Machines screen.
   setInterval(function(){ refreshAutoShift(); if(active==="machines") render(); }, 60000);
   if(typeof window!=="undefined"){
-    window.addEventListener("online", function(){ scheduleAutoSync(1500); });
-    window.addEventListener("focus", function(){ scheduleAutoSync(1500); });
+    window.addEventListener("online", function(){ scheduleAutoSync(1500); pullShared(); });
+    window.addEventListener("focus", function(){ scheduleAutoSync(1500); pullShared(); });
   }
   if(typeof document!=="undefined"){
-    document.addEventListener("visibilitychange", function(){ if(!document.hidden) scheduleAutoSync(1500); });
+    document.addEventListener("visibilitychange", function(){ if(!document.hidden){ scheduleAutoSync(1500); pullShared(); } });
   }
 
   /* toast */
@@ -2287,6 +2511,17 @@
     },{passive:false});
   })();
   load(); render(); scheduleAutoSync(3000);
+  // Hydrate from the shared master copy on open; if the master is empty/behind and this
+  // phone already holds real data, seed the master from here.
+  setTimeout(function(){
+    pullShared({cb:function(applied){
+      if(!applied){
+        var hasData=(state.runs&&state.runs.length)||(state.batches&&state.batches.length)||
+                    (state.dispatchLoads&&state.dispatchLoads.some(function(l){return !l.dummy;}));
+        if(hasData) scheduleSharedPush();
+      }
+    }});
+  }, 1500);
   if("serviceWorker" in navigator){ try{ navigator.serviceWorker.register("sw.js"); }catch(e){} }
 })();
 </script>
