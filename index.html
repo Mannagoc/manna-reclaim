@@ -353,6 +353,33 @@
 
   .muted{ color:var(--ink-faint); }
   .hr{ height:1px; background:var(--line); margin:16px 0; border:none; }
+
+  /* ---- history audit view ---- */
+  .hvctl{ display:flex; align-items:flex-end; gap:10px; flex-wrap:wrap; margin:2px 0 16px; }
+  .hvctl .hvfield{ display:flex; flex-direction:column; gap:5px; }
+  .hvctl label{ font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint); font-weight:700; }
+  .hvctl input[type=date]{ background:var(--panel2); border:1px solid var(--line2); color:var(--ink); border-radius:var(--r-sm); padding:9px 11px; font-family:var(--mono); font-size:14px; color-scheme:dark; }
+  .hvseg{ display:inline-flex; background:var(--panel2); border:1px solid var(--line2); border-radius:var(--r-sm); padding:3px; gap:3px; }
+  .hvseg button{ border:none; background:none; color:var(--ink-dim); font-weight:700; font-size:13.5px; padding:8px 16px; border-radius:7px; }
+  .hvseg button.on{ background:var(--amber); color:#1c1306; }
+  .hsec{ display:flex; align-items:center; gap:12px; margin:18px 2px 10px; }
+  .hsec b{ font-size:11.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-dim); font-weight:800; }
+  .hsec .ln{ flex:1; height:1px; background:var(--line); }
+  .hgrid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px; }
+  .htile{ position:relative; text-align:left; background:linear-gradient(180deg,var(--panel2),var(--panel)); border:1px solid var(--line); border-radius:var(--r); padding:13px 14px; color:var(--ink); min-height:96px; display:flex; flex-direction:column; }
+  .htile:active{ transform:translateY(1px); }
+  .htile.idle{ opacity:.6; }
+  .htile.hot{ border-color:#5a431f; }
+  .htile .hn{ font-weight:750; font-size:15px; letter-spacing:-.01em; }
+  .htile .hk{ font-size:10px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-faint); margin-top:2px; }
+  .htile .hc{ margin-top:auto; padding-top:12px; font-size:11px; color:var(--ink-faint); }
+  .htile .hc b{ font-size:26px; font-weight:600; color:var(--ink); line-height:.9; margin-right:5px; }
+  .htile .htag{ position:absolute; top:11px; right:11px; font-size:10.5px; font-weight:750; color:var(--amber); background:rgba(232,161,58,.13); border:1px solid #5a431f; border-radius:20px; padding:2px 8px; }
+  .hvback{ display:inline-flex; align-items:center; gap:5px; background:none; border:none; color:var(--ink-dim); font-weight:650; font-size:14px; padding:4px 2px; margin-bottom:6px; }
+  .hvdethead{ display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin:2px 2px 14px; }
+  .hvdethead h2{ margin:0; font-size:21px; font-weight:800; }
+  .hvdethead .muted{ font-family:var(--mono); font-size:13px; }
+  .hvmiss{ color:var(--amber); background:rgba(232,161,58,.13); border:1px solid #5a431f; border-radius:6px; font-size:11px; font-weight:700; padding:3px 8px; }
   @media (prefers-reduced-motion: reduce){ *{ animation:none !important; transition:none !important; } }
 </style>
 </head>
@@ -462,13 +489,15 @@
 
   /* ===================== state ===================== */
   var state;
-  function blank(){ return { v:1, settings:{syncUrl:"",supabaseUrl:SUPABASE_URL,supabaseKey:SUPABASE_ANON,device:"",role:"manager",pin:"",customers:[]}, sharedVersion:0, seq:{batch:0}, crumb:{truck:0,bike:0}, leftout:{}, batches:[], runs:[], dispatches:[], dispatchLoads:[], vehicles:[], drivers:[], maintenance:[], bearingLogs:[], conversions:[], shift:{date:todayISO(),name:autoShift(),supervisor:""}, machines:{}, qualityTests:[] }; }
+  function blank(){ return { v:1, settings:{syncUrl:"",supabaseUrl:SUPABASE_URL,supabaseKey:SUPABASE_ANON,device:"",role:"manager",pin:"",customers:[]}, sharedVersion:0, seq:{batch:0}, crumb:{truck:0,bike:0}, leftout:{}, batches:[], runs:[], dispatches:[], dispatchLoads:[], vehicles:[], drivers:[], maintenance:[], bearingLogs:[], conversions:[], shift:{date:"",name:autoShift(),supervisor:""}, machines:{}, qualityTests:[] }; }
   function todayISO(){ var d=new Date(),m=d.getMonth()+1,day=d.getDate(); return d.getFullYear()+"-"+(m<10?"0":"")+m+"-"+(day<10?"0":"")+day; }
   function autoShift(){ var h=new Date().getHours(); return (h>=6&&h<18)?"Day":"Night"; }
-  function curShift(){ if(!state.shift) state.shift={date:todayISO(),name:autoShift()}; return state.shift; }
-  function setShift(name,date,supervisor){ var c=curShift(); state.shift={ name:name||c.name, date:date||todayISO(), supervisor:(supervisor!=null?supervisor:c.supervisor)||"" }; save(); render(); pushShift(); }
-  function autoShiftNow(){ return { date:todayISO(), name:autoShift() }; }
-  function refreshAutoShift(){ var a=autoShiftNow(), c=curShift(); if(c.name!==a.name || c.date!==a.date){ state.shift={ name:a.name, date:a.date, supervisor:c.supervisor||"" }; } }
+  function curShift(){ if(!state.shift) state.shift={date:"",name:autoShift(),supervisor:""}; return state.shift; }
+  function setShift(name,date,supervisor){ var c=curShift(); state.shift={ name:name||c.name, date:(date!=null?date:c.date)||"", supervisor:(supervisor!=null?supervisor:c.supervisor)||"" }; save(); render(); pushShift(); }
+  function autoShiftNow(){ return { date:"", name:autoShift() }; }
+  // shift name may follow the clock, but the production DATE is always set by the supervisor (never auto)
+  function refreshAutoShift(){ var c=curShift(); if(!c.name) state.shift.name=autoShift(); }
+  function shiftReady(){ var c=curShift(); if(!c.date){ toast("Set the production date for this shift first","warn"); openShiftPicker(); return false; } return true; }
   function pushShift(){
     if(syncTarget()!=="supabase") return;
     var c=curShift(); if(!c.supervisor) return;
@@ -526,7 +555,7 @@
       s.dispatchLoads.push(mkLoad("EASTERN",true,"KL-17-CD-5678","Rajan",[ mk("Special","",null,1500,"EASTERN"), mk("SuperFine","",null,800,"EASTERN") ],30));
     }
     if(!s.leftout) s.leftout={};
-    if(!s.shift) s.shift={date:todayISO(),name:autoShift(),supervisor:""};
+    if(!s.shift) s.shift={date:"",name:autoShift(),supervisor:""};
     if(s.shift.supervisor==null) s.shift.supervisor="";
     if(!s.crumb) s.crumb={truck:0,bike:0};
     if(s.settings.autoSync==null) s.settings.autoSync=true;
@@ -592,11 +621,13 @@
   function fmtDay(iso){ if(!iso) return ""; var p=String(iso).split("-"); if(p.length<3) return iso;
     var mo=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]; return parseInt(p[2],10)+" "+mo[parseInt(p[1],10)-1]; }
   function defaultShift(){
-    var now=new Date(), mins=now.getHours()*60+now.getMinutes(), d=new Date(now), shift;
+    var now=new Date(), mins=now.getHours()*60+now.getMinutes(), shift;
     if(mins>=510 && mins<1230){ shift="Day"; }            // 08:30–20:30
     else if(mins>=1230){ shift="Night"; }                  // 20:30 onward
-    else { shift="Night"; d.setDate(d.getDate()-1); }      // before 08:30 -> previous night
-    return { date:isoDate(d), shift:shift };
+    else { shift="Night"; }                                // before 08:30 -> night
+    var c=state.shift||{};
+    // date always comes from the supervisor-set shift (manual); shift name may follow the clock
+    return { date:(c.date||""), shift:(c.name||shift) };
   }
   function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c];}); }
   function num(v){ if(v==="" || v==null) return null; var n=parseFloat(v); return isNaN(n)?null:n; }
@@ -1266,6 +1297,7 @@
   /* ===================== views ===================== */
   var active="machines";
   var lastTab=null;
+  var HV=null;   // history audit view state: { date, shift, machine }
   var TABS=[
     {id:"machines",label:"Machines",icon:'<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>'},
     {id:"batches",label:"Batches",icon:'<path d="M12 2 3 7l9 5 9-5-9-5Z"/><path d="M3 17l9 5 9-5"/><path d="M3 12l9 5 9-5"/>'},
@@ -1315,7 +1347,8 @@
     var dueBar = due.length ? '<div class="duebar" data-bearings-any="1">🌡 '+due.length+' machine'+(due.length>1?'s':'')+' due for bearing temp logging — '+due.map(function(m){return esc(m.short);}).join(", ")+' · tap to log</div>' : '';
     var c=curShift();
     var sup = c.supervisor ? esc(c.supervisor) : '<span style="color:var(--amber)">set supervisor</span>';
-    return '<div class="view-head"><h1>Machines</h1><div class="meta"><span class="shiftchip" data-shift="1"><b>'+esc(c.name)+'</b> · '+esc(fmtDay(c.date))+' · 👤 '+sup+' <span style="opacity:.6">▾</span></span></div></div>'+dueBar+crumbBar+body;
+    var dateTxt = c.date ? esc(fmtDay(c.date)) : '<span style="color:var(--amber)">set date</span>';
+    return '<div class="view-head"><h1>Machines</h1><div class="meta"><span class="shiftchip" data-shift="1"><b>'+esc(c.name)+'</b> · '+dateTxt+' · 👤 '+sup+' <span style="opacity:.6">▾</span></span></div></div>'+dueBar+crumbBar+body;
   }
   function lastRunFor(mid){
     var last=null;
@@ -1440,7 +1473,7 @@
   /* ----- shift context & report ----- */
   function openShiftPicker(){ var c=curShift(); var pick={name:c.name};
     openSheet('<div class="sheet-h"><b>Shift &amp; supervisor</b></div>'+
-      '<div class="sheet-sub">The shift follows the clock automatically. Set who is in charge — it is tagged on everything logged this shift.</div>'+
+      '<div class="sheet-sub">Pick the production date on the calendar, set the shift, and who is in charge \u2014 it is tagged on everything logged this shift.</div>'+
       '<div class="field"><label>Supervisor in charge</label><select id="sh-sup">'+
         '<option value="">— select —</option>'+
         SUPERVISORS.map(function(n){ return '<option value="'+esc(n)+'"'+(c.supervisor===n?' selected':'')+'>'+esc(n)+'</option>'; }).join("")+
@@ -1449,13 +1482,14 @@
       '<div class="sheet-label">Shift</div><div class="pickgrid q4">'+
         '<button class="pick'+(c.name==="Day"?" sel":"")+'" data-shift-set="Day"><b>Day</b></button>'+
         '<button class="pick'+(c.name==="Night"?" sel":"")+'" data-shift-set="Night"><b>Night</b></button></div>'+
-      '<div class="field" style="margin-top:14px"><label>Date <span class="muted" style="text-transform:none;letter-spacing:0">— auto today</span></label><input id="sh-date" type="date" value="'+esc(c.date)+'"></div>'+
+      '<div class="field" style="margin-top:14px"><label>Production date <span class="muted" style="text-transform:none;letter-spacing:0">\u2014 pick on the calendar</span></label><input id="sh-date" type="date" value="'+esc(c.date||"")+'"></div>'+
       '<div class="sheet-actions"><button class="btn primary block" id="sh-done">Save</button></div>');
     sheet.querySelectorAll("[data-shift-set]").forEach(function(el){ el.addEventListener("click",function(){
       pick.name=el.getAttribute("data-shift-set");
       sheet.querySelectorAll("[data-shift-set]").forEach(function(g){ g.classList.remove("sel"); }); el.classList.add("sel"); }); });
     sheet.querySelector("#sh-done").addEventListener("click",function(){
-      var date=(sheet.querySelector("#sh-date").value||c.date), sup=(sheet.querySelector("#sh-sup").value||"").trim();
+      var date=(sheet.querySelector("#sh-date").value||"").trim(), sup=(sheet.querySelector("#sh-sup").value||"").trim();
+      if(!date){ toast("Pick the production date on the calendar","warn"); return; }
       setShift(pick.name,date,sup); closeSheet(); toast("Saved · "+pick.name+(sup?" · "+sup:""),"ok"); }); }
 
   function shiftAgg(key){
@@ -1831,7 +1865,7 @@
   }
 
   /* ================= Quality control (QC) module ================= */
-  var QC_PARAM_SUGGEST=["Specific gravity","Mooney viscosity","Ash %","Acetone extract %","Tensile (MPa)","Elongation %","Hardness (Shore A)","Fineness / mesh","Moisture %","Contamination"];
+  var QC_PARAM_SUGGEST=["Carbon black %","Rubber content %","Specific gravity","Mooney viscosity","Ash %","Acetone extract %","Tensile (MPa)","Elongation %","Hardness (Shore A)","Fineness / mesh","Moisture %","Contamination"];
   function qcKeyCoarse(date,shift){ return (date||"")+"|"+(shift||""); }
   function qcLatestBatch(no){
     var arr=(state.qualityTests||[]).filter(function(q){ return q.kind==="batch" && String(q.batchNo)===String(no); });
@@ -2016,34 +2050,99 @@
   }
 
 
+  function hvInit(){
+    if(HV) return;
+    var c=curShift(), date=c.date||"", shift=c.name||"Day";
+    if(!date && state.runs.length){          // fall back to the most recent run's shift
+      var lr=null; state.runs.forEach(function(r){ if(!lr || (r.end||r.start||0)>(lr.end||lr.start||0)) lr=r; });
+      if(lr){ date=lr.shiftDate||date; shift=lr.shift||shift; }
+    }
+    HV={ date:date, shift:shift, machine:null };
+  }
   function viewHistory(){
-    if(!state.runs.length) return '<div class="view-head"><h1>History</h1></div>'+
-      empty('<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 4v4h4"/>',"No runs logged","Captured runs from every machine show up here.");
-    var rows=state.runs.slice().reverse();
-    var body=rows.map(function(r){
-      var isShift = !!r.shift;
-      var ep=[];
-      if(r.kWh!==""&&r.kWh!=null) ep.push(esc(r.kWh)+' kWh');
-      if(r.firewoodKg!==""&&r.firewoodKg!=null) ep.push(esc(r.firewoodKg)+' kg');
-      var energy = ep.length ? ep.join(' · ') : '—';
-      var when = isShift ? (esc(fmtDay(r.shiftDate))+' '+esc(r.shift)) : fmtDate(r.end);
-      var col2 = isShift ? '<span class="qchip shift"'+(r.line==="coarse"?' style="background:var(--ember)"':'')+'>'+esc(r.shift)+'</span>'+(r.formulation?'<br><span class="muted" style="font-size:10px">'+esc(r.formulation)+'</span>':'')
-                      : '<span class="batchref" style="font-size:12px">'+esc(r.batchNo)+'</span>'+(r.quality?'<br>'+qchip(r.quality):'');
-      var wt = (r.weightKg!==""&&r.weightKg!=null) ? esc(r.weightKg)+' kg' : (r.machineId==="R4" ? '<span class="muted">pending</span>' : '—');
-      var mlabel = r.short || shortName(r.machineId);
-      var sup = r.supervisor ? '<br><span class="muted" style="font-size:10px">\uD83D\uDC64 '+esc(r.supervisor)+'</span>' : '';
-      return '<tr class="hrow" data-edit-run="'+esc(r.id)+'" style="cursor:pointer"><td><span class="synced '+(r.synced?"yes":"")+'"></span></td>'+
-        '<td><b>'+esc(mlabel)+'</b>'+((r.passes||1)>1?' <span class="muted" style="font-size:10px">×'+r.passes+'</span>':'')+'<br><span class="muted" style="font-size:11px">'+when+'</span>'+sup+'</td>'+
-        '<td>'+col2+'</td>'+
-        '<td class="tnum">'+fmtDur(r.runtimeMin)+'</td>'+
-        '<td class="tnum">'+energy+'</td>'+
-        '<td class="tnum">'+(r.workers!==""?esc(r.workers):'—')+'</td>'+
-        '<td class="tnum">'+wt+'</td></tr>';
+    hvInit();
+    var clock='<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 4v4h4"/>';
+    var head='<div class="view-head"><h1>History</h1><div class="meta">Audit logged runs — pick the day &amp; shift, then a machine</div></div>';
+    var controls='<div class="hvctl">'
+      +'<div class="hvfield"><label>Day</label><input type="date" id="hv-date" value="'+esc(HV.date)+'"></div>'
+      +'<div class="hvseg"><button data-hv-shift="Day" class="'+(HV.shift==="Day"?"on":"")+'">Day</button>'
+        +'<button data-hv-shift="Night" class="'+(HV.shift==="Night"?"on":"")+'">Night</button></div>'
+      +'</div>';
+
+    if(!HV.date){
+      return head+controls+empty(clock,"Pick a production day","Choose the day and shift to review every run logged for it. Tap any run to correct it.");
+    }
+
+    var runs=(state.runs||[]).filter(function(r){ return (r.shiftDate||"")===HV.date && (r.shift||"")===HV.shift; });
+
+    if(HV.machine) return head+controls+hvMachineDetail(runs);
+
+    // counts per machine
+    var byM={}, miss={}, total=0, totalMiss=0, sset={};
+    runs.forEach(function(r){ var id=r.machineId||"?"; byM[id]=(byM[id]||0)+1; total++;
+      if(!r.supervisor){ miss[id]=(miss[id]||0)+1; totalMiss++; } else sset[String(r.supervisor).trim()]=1; });
+
+    var summary='<div class="statgrid" style="grid-template-columns:repeat(3,1fr);margin-bottom:6px">'
+      +stat(total,"","runs")+stat(totalMiss,"","no supervisor")+stat(Object.keys(sset).length,"","supervisors")+'</div>';
+    var supLine=Object.keys(sset).length?'<div class="muted" style="margin:2px 2px 8px;font-size:12.5px;font-family:var(--mono)">on shift: '+esc(Object.keys(sset).join(" · "))+'</div>':'';
+    var banner = total ? '' : '<div class="hint" style="margin:6px 2px 12px;color:var(--amber)">No runs logged for '+esc(fmtDay(HV.date))+' · '+esc(HV.shift)+'.</div>';
+
+    // groups (machine roster order) + any unknown machine ids that have runs
+    var groups=[], seen={}, known={};
+    MACHINES.forEach(function(m){ known[m.id]=1; var g=m.group||"Machines"; if(!seen[g]){ seen[g]=[]; groups.push(g); } seen[g].push(m); });
+    Object.keys(byM).forEach(function(id){ if(!known[id]){ if(!seen["Other"]){ seen["Other"]=[]; groups.push("Other"); } seen["Other"].push({id:id,name:id,short:id,kind:"other",group:"Other"}); } });
+
+    var grid=groups.map(function(g){
+      var tiles=seen[g].map(function(m){
+        var n=byM[m.id]||0, ms=miss[m.id]||0;
+        return '<button class="htile'+(n?"":" idle")+(ms?" hot":"")+'" data-hv-machine="'+esc(m.id)+'">'
+          +(ms?'<span class="htag">⚠ '+ms+'</span>':'')
+          +'<div class="hn">'+esc(m.name||m.short||m.id)+'</div><div class="hk">'+esc(m.kind||"")+'</div>'
+          +'<div class="hc"><b class="tnum">'+n+'</b>run'+(n===1?"":"s")+'</div></button>';
+      }).join("");
+      return '<div class="hsec"><b>'+esc(g)+'</b><span class="ln"></span></div><div class="hgrid">'+tiles+'</div>';
     }).join("");
-    var u=unsynced().length;
-    return '<div class="view-head"><h1>History</h1><div class="meta">'+state.runs.length+' rows · '+u+' unsynced · tap a row to edit</div></div>'+
-      '<div class="panel scroll-x"><table class="hist"><thead><tr><th></th><th>Machine</th><th>Batch</th><th>Run</th><th>Energy</th><th>Crew</th><th>Weight</th></tr></thead><tbody>'+body+'</tbody></table></div>'+
-      '<div style="margin-top:12px"><button class="btn ghost block" data-act="export">Export CSV backup</button></div>';
+
+    var csv='<div style="margin-top:18px"><button class="btn ghost block" data-act="export">Export CSV backup</button></div>';
+    return head+controls+summary+supLine+banner+grid+csv;
+  }
+
+  function hvMachineDetail(allRuns){
+    var mid=HV.machine, mm=M(mid);
+    var name=(mm&&mm.name)||shortName(mid)||mid;
+    var runs=allRuns.filter(function(r){ return (r.machineId||"?")===mid; });
+    var back='<button class="hvback" data-hv-back="1">\u2039 All machines</button>';
+    var dethead='<div class="hvdethead"><h2>'+esc(name)+'</h2><span class="muted">'+esc(fmtDay(HV.date))+' · '+esc(HV.shift)+' · '+runs.length+' run'+(runs.length===1?"":"s")+'</span></div>';
+    if(!runs.length) return back+dethead+empty('<path d="M9 11l3 3 8-8"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',"No runs on this machine","Nothing was logged on "+esc(name)+" for this shift.");
+    runs.sort(function(a,b){ return (a.end||a.start||0)-(b.end||b.start||0); });
+    return back+dethead+'<div class="stack">'+runs.map(hvRunCard).join("")+'</div>';
+  }
+
+  function hvRunCard(r){
+    var sw=(r.line==="grind"||r.line==="coarse");
+    var miss=!r.supervisor;
+    var when=r.end?fmtDate(r.end):(r.shiftDate?fmtDay(r.shiftDate):"");
+    var chips=[];
+    if(r.batchNo) chips.push('<span class="batchref" style="font-size:13px">'+esc(r.batchNo)+'</span>');
+    if(r.quality) chips.push(qchip(r.quality));
+    if(sw) chips.push('<span class="qchip shift"'+(r.line==="coarse"?' style="background:var(--ember)"':'')+'>'+esc(r.shift)+'</span>');
+    if(r.formulation) chips.push('<span class="formchip">'+esc(r.formulation)+'</span>');
+    if(r.tyreType && TYRES[r.tyreType]) chips.push('<span class="formchip" style="color:var(--steel)">'+esc(TYRES[r.tyreType].mesh)+'</span>');
+    if((r.passes||1)>1) chips.push('<span class="formchip">×'+esc(r.passes)+'</span>');
+    if(miss) chips.push('<span class="hvmiss">no supervisor</span>');
+    var facts=[];
+    if(r.runtimeMin!=null&&r.runtimeMin!=="") facts.push(fmtDur(r.runtimeMin));
+    if(r.kWh!==""&&r.kWh!=null) facts.push(esc(r.kWh)+' kWh');
+    if(r.firewoodKg!==""&&r.firewoodKg!=null) facts.push(esc(r.firewoodKg)+' kg fw');
+    if(r.weightKg!==""&&r.weightKg!=null) facts.push(esc(r.weightKg)+' kg out');
+    if(r.workers!==""&&r.workers!=null) facts.push(esc(r.workers)+' crew');
+    var sup=r.supervisor?('\uD83D\uDC64 '+esc(r.supervisor)):'<span style="color:var(--amber)">no supervisor</span>';
+    return '<div class="bcard" data-edit-run="'+esc(r.id)+'" style="cursor:pointer">'
+      +'<div class="bhead"><div class="l" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">'+chips.join(" ")+'</div>'
+        +'<span class="muted" style="font-size:11px">'+esc(when)+(r.synced?'':' · not synced')+'</span></div>'
+      +'<div class="bhint" style="margin-top:9px">'+(facts.length?facts.join(" · "):"—")+'</div>'
+      +'<div class="bhint" style="margin-top:4px">'+sup+' · tap to edit</div>'
+      +'</div>';
   }
 
   /* ---- Editable history: tap a row to correct or delete an entry ---- */
@@ -2082,6 +2181,12 @@
       '<button class="btn primary" id="e-save">Save changes</button></div>'+
       '<button class="btn danger block" id="e-del" style="margin-top:10px">Delete this entry</button>');
     sheet.querySelector("#e-save").addEventListener("click",function(){
+      // guard against negative readings/values
+      var vRt=sheet.querySelector("#e-rt"), vKwh=sheet.querySelector("#e-kwh"), vFw=sheet.querySelector("#e-fw"), vWt=sheet.querySelector("#e-wt");
+      if(vRt && vRt.value!=="" && num(vRt.value)<0){ toast("Run time can't be negative","err"); return; }
+      if(vKwh && vKwh.value!=="" && num(vKwh.value)<0){ toast("Energy (kWh) can't be negative","err"); return; }
+      if(vFw && vFw.value!=="" && num(vFw.value)<0){ toast("Firewood can't be negative","err"); return; }
+      if(vWt && vWt.value!=="" && num(vWt.value)<0){ toast("Weight can't be negative","err"); return; }
       if(!isShift){
         var eb=sheet.querySelector("#e-batch"); if(eb) r.batchNo=(eb.value||"").trim();
         var eq=sheet.querySelector("#e-qual"); if(eq) r.quality=eq.value||"";
@@ -2361,6 +2466,7 @@
     var m=M(mid), st=state.machines[mid];
     if(st.down) return openRepairSheet(mid);
     if(st.running) return openOffSheet(mid);
+    if(!shiftReady()) return;                 // production date must be set manually before any new run
     if(m.kind==="coarse"||m.kind==="grind") return openShiftStart(mid);
     if(m.kind==="autoclave") return openAutoclaveOn(mid);
     return openRefinerOn(mid);
@@ -2607,6 +2713,13 @@
       }
       if(fw) f.firewoodKg=num(fw.value);
       f.workers=wk?num(wk.value):null; if(wt) f.weightKg=num(wt.value);
+      // readings must move forward — final cannot be below the start reading
+      if(elec && f.elecStart!=null && f.elecEnd!=null && f.elecEnd < f.elecStart){
+        toast("Electricity: final reading "+f.elecEnd+" is below the start "+f.elecStart+". Check the meter.","err"); return;
+      }
+      if(m.kind!=="autoclave" && hr && hs!=null && f.hourEnd!=null && f.hourEnd < hs){
+        toast("Hour-meter: final reading "+f.hourEnd+" is below the start "+hs+". Check the reading.","err"); return;
+      }
       commitRun(mid,f);
     });
     var clb=sheet.querySelector("#off-cancelload");
@@ -2763,6 +2876,10 @@
     lastTab=active;
   }
 
+  document.body.addEventListener("change",function(e){
+    var d=e.target.closest("#hv-date"); if(d){ HV=HV||{}; HV.date=d.value||""; HV.machine=null; render(); }
+  });
+
   document.getElementById("tabs").addEventListener("click",function(e){
     var b=e.target.closest("[data-tab]"); if(!b) return; active=b.getAttribute("data-tab"); render();
   });
@@ -2787,6 +2904,9 @@
     if((t=e.target.closest("[data-load]"))){ openLoadDetail(t.getAttribute("data-load")); return; }
     if((t=e.target.closest("[data-qc-batch]"))){ openQcBatch(t.getAttribute("data-qc-batch"), t.getAttribute("data-qc-q")||""); return; }
     if((t=e.target.closest("[data-qc-coarse]"))){ openQcCoarse(t.getAttribute("data-qc-coarse")); return; }
+    if((t=e.target.closest("[data-hv-shift]"))){ HV=HV||{}; HV.shift=t.getAttribute("data-hv-shift"); HV.machine=null; render(); return; }
+    if((t=e.target.closest("[data-hv-machine]"))){ HV=HV||{}; HV.machine=t.getAttribute("data-hv-machine"); render(); return; }
+    if((t=e.target.closest("[data-hv-back]"))){ HV=HV||{}; HV.machine=null; render(); return; }
     if((t=e.target.closest("[data-edit-run]"))){ openEditRun(t.getAttribute("data-edit-run")); return; }
     if((t=e.target.closest("[data-custdel]"))){ var cd=t.getAttribute("data-custdel");
       state.settings.customers=(state.settings.customers||[]).filter(function(c){ return c.code!==cd; }); save(); render(); return; }
