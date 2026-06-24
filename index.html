@@ -587,6 +587,8 @@
   function fmtDate(ms){ var d=new Date(ms); var mo=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
     return mo[d.getMonth()]+" "+d.getDate()+" "+fmtClock(ms); }
   function isoDate(d){ function p(n){return(n<10?"0":"")+n;} return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate()); }
+  function localDTValue(ms){ var d=new Date(ms); function p(n){return(n<10?"0":"")+n;} return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+"T"+p(d.getHours())+":"+p(d.getMinutes()); }
+  function parseLocalDT(v){ if(!v) return null; var t=Date.parse(v); return isNaN(t)?null:t; }
   function fmtDay(iso){ if(!iso) return ""; var p=String(iso).split("-"); if(p.length<3) return iso;
     var mo=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]; return parseInt(p[2],10)+" "+mo[parseInt(p[1],10)-1]; }
   function defaultShift(){
@@ -977,14 +979,15 @@
   function bearingToSb(x){ return {
     id:x.id, device:sbStr(x.device), machine_id:sbStr(x.machineId), machine:sbStr(x.machine),
     position:sbStr(x.position), bearing_type:sbStr(x.bearingType), temp_c:sbN(x.tempC),
-    ts:sbISO(x.ts==null?null:+new Date(x.ts)), shift_date:sbN(x.shiftDate), shift:sbN(x.shift), supervisor:sbN(x.supervisor) }; }
+    ts:sbISO(x.ts==null?null:+new Date(x.ts)), logged_at:sbISO(x.loggedAt==null?null:+new Date(x.loggedAt)), shift_date:sbN(x.shiftDate), shift:sbN(x.shift), supervisor:sbN(x.supervisor) }; }
   function convToSb(x){ return {
     id:x.id, device:sbStr(x.device), batch_no:sbStr(x.batchNo), from_quality:"Special", to_quality:"SuperFine",
     qty_kg:sbN(x.qty), stage:sbStr(x.stage), ts:sbISO(x.ts), shift_date:sbN(x.shiftDate), shift:sbN(x.shift), supervisor:sbN(x.supervisor) }; }
   function qualToSb(q){ return {
-    id:q.id, device:sbStr(q.device), ts:sbISO(q.ts), kind:sbStr(q.kind), batch_no:sbN(q.batchNo),
+    id:q.id, device:sbStr(q.device), ts:sbISO(q.ts), kind:sbStr(q.kind), batch_no:sbN(q.batchNo), quality:sbN(q.quality),
     shift_date:sbN(q.shiftDate), shift:sbN(q.shift), verdict:sbStr(q.verdict),
-    params:(q.params||[]), tester:sbN(q.tester), notes:sbN(q.notes) }; }
+    params:(q.params||[]), tester:sbN(q.tester), notes:sbN(q.notes),
+    attachment_url:sbN(q.attachmentUrl), attachment_name:sbN(q.attachmentName) }; }
   function loadToSb(l){ return {
     id:l.id, device:sbStr(l.device), ts:sbISO(l.ts), customer:sbStr(l.customer),
     own_vehicle:(l.ownVehicle==null?null:!!l.ownVehicle), vehicle_no:sbStr(l.vehicleNo), driver:sbStr(l.driver),
@@ -1175,12 +1178,47 @@
         rows.forEach(function(row){
           if(have[row.id]) return;
           state.qualityTests.push({ id:row.id, device:row.device||"", ts:row.ts?+new Date(row.ts):Date.now(),
-            kind:row.kind, batchNo:row.batch_no, shiftDate:row.shift_date, shift:row.shift,
-            params:row.params||[], verdict:row.verdict, tester:row.tester||"", notes:row.notes||"", synced:true });
+            kind:row.kind, batchNo:row.batch_no, quality:row.quality||"", shiftDate:row.shift_date, shift:row.shift,
+            params:row.params||[], verdict:row.verdict, tester:row.tester||"", notes:row.notes||"",
+            attachmentUrl:row.attachment_url||"", attachmentName:row.attachment_name||"", synced:true });
           changed=true;
         });
         if(changed){ store.write(JSON.stringify(state)); if(!sheetIsOpen()) render(); }
       }).catch(function(){});
+  }
+  /* QC lab-report photo/PDF upload to Supabase Storage. Files never go into the shared
+     state snapshot; only the resulting public URL does. Offline files queue separately. */
+  function qcQueueGet(){ try{ return JSON.parse(localStorage.getItem("qcUploadQueue")||"[]"); }catch(e){ return []; } }
+  function qcQueueSet(a){ try{ localStorage.setItem("qcUploadQueue", JSON.stringify(a)); return true; }catch(e){ return false; } }
+  function qcEnqueueUpload(testId, name, dataUrl){ var q=qcQueueGet(); q.push({ testId:testId, name:name, dataUrl:dataUrl, ts:Date.now() }); return qcQueueSet(q); }
+  function uploadToBucket(bucket, id, name, dataUrl){
+    var base=sharedBase(), key=sharedKey();
+    var safe=(name||"photo").replace(/[^a-zA-Z0-9._-]/g,"_").slice(-60);
+    var path=encodeURIComponent(id)+"/"+Date.now()+"_"+Math.random().toString(36).slice(2,7)+"_"+safe;
+    return fetch(dataUrl).then(function(r){ return r.blob(); }).then(function(blob){
+      return fetch(base+"/storage/v1/object/"+bucket+"/"+path,{ method:"POST",
+        headers:{ "apikey":key, "Authorization":"Bearer "+key, "Content-Type":blob.type||"application/octet-stream", "x-upsert":"true" },
+        body:blob }).then(function(res){
+          if(!res.ok) return res.text().then(function(t){ throw new Error("HTTP "+res.status+" "+(t||"").slice(0,120)); });
+          return base+"/storage/v1/object/public/"+bucket+"/"+path;
+        });
+    });
+  }
+  function uploadDataUrl(testId, name, dataUrl){ return uploadToBucket("qc-reports", testId, name, dataUrl); }
+  var qcFlushing=false;
+  function flushQcUploads(){
+    if(qcFlushing) return;
+    if(syncTarget()!=="supabase") return;
+    if(typeof navigator!=="undefined" && navigator.onLine===false) return;
+    var q=qcQueueGet(); if(!q.length) return;
+    qcFlushing=true; var item=q[0];
+    uploadDataUrl(item.testId, item.name, item.dataUrl).then(function(url){
+      var rec=null; (state.qualityTests||[]).forEach(function(t){ if(t.id===item.testId) rec=t; });
+      if(rec){ rec.attachmentUrl=url; rec.attachmentName=item.name; rec.attachmentPending=false; rec.synced=false; }
+      var q2=qcQueueGet(); q2.shift(); qcQueueSet(q2);
+      qcFlushing=false; save(); if(!sheetIsOpen()) render();
+      if(qcQueueGet().length) setTimeout(flushQcUploads, 800);
+    }).catch(function(){ qcFlushing=false; /* keep in queue, retry on next trigger */ });
   }
 
   function syncSheet(opts){
@@ -1211,7 +1249,7 @@
   }
 
   function exportCSV(){
-    var cols=["id","device","machine","autoclaveId","shift","shiftDate","batchNo","capacity","formulation","quality","start","end","runtimeMin","hoursRun","passes","kWh","firewoodKg","workers","weightKg","synced"];
+    var cols=["id","device","machine","autoclaveId","shift","shiftDate","supervisor","batchNo","capacity","formulation","quality","start","end","runtimeMin","hoursRun","passes","kWh","firewoodKg","workers","weightKg","synced"];
     var lines=[cols.join(",")];
     state.runs.forEach(function(r){
       lines.push(cols.map(function(c){
@@ -1236,6 +1274,7 @@
     {id:"dispatch",label:"Dispatch",icon:'<path d="M1 3h13v10H1z"/><path d="M14 7h4l3 3v3h-7z"/><circle cx="6" cy="17" r="2"/><circle cx="17" cy="17" r="2"/>'},
     {id:"quality",label:"Quality",icon:'<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>'},
     {id:"history",label:"History",icon:'<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 4v4h4"/><path d="M12 8v4l3 2"/>'},
+    {id:"bearings",label:"Bearings",icon:'<path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0Z"/>'},
     {id:"reports",label:"Reports",icon:'<path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M22 20H2"/>'}
   ];
 
@@ -1246,9 +1285,9 @@
     return TABS; // manager: everything, including Quality, for oversight
   }
   function renderTabs(){
-    var pw=pendingWeigh().length, pp=pendingPack().length, pq=pendingQC();
+    var pw=pendingWeigh().length, pp=pendingPack().length, pq=pendingQC(), pb=dueMachines().length;
     document.getElementById("tabs").innerHTML=allowedTabs().map(function(t){
-      var n=(t.id==="weigh")?pw:(t.id==="packing"?pp:(t.id==="quality"?pq:0));
+      var n=(t.id==="weigh")?pw:(t.id==="packing"?pp:(t.id==="quality"?pq:(t.id==="bearings"?pb:0)));
       var badge=(n>0)?'<i class="tabbadge">'+n+'</i>':'';
       return '<button data-tab="'+t.id+'" class="'+(active===t.id?"active":"")+'">'+badge+
         '<svg viewBox="0 0 24 24">'+t.icon+'</svg><span>'+t.label+'</span></button>';
@@ -1465,24 +1504,33 @@
         '<div class="num-suffix"><input id="bt-'+i+'" type="number" inputmode="decimal" placeholder="temperature"><span class="sfx">°C</span></div></div>';
     }).join("");
     var dueNote = bearingDue(m) ? '<div class="hint" style="color:var(--amber);margin-top:-2px">⚠ Overdue — log now.</div>' : '';
+    var whenField='<div class="field" style="margin-top:6px"><label>Recorded at <span class="muted" style="text-transform:none;letter-spacing:0">— change if the reading was taken earlier</span></label>'+
+      '<input id="bt-when" type="datetime-local" value="'+esc(localDTValue(Date.now()))+'" max="'+esc(localDTValue(Date.now()))+'"></div>';
     openSheet('<div class="sheet-h"><span class="led" style="background:radial-gradient(circle at 35% 30%,#9fe0ea,var(--elec))"></span><b>'+label+' temps — '+esc(m.name)+'</b></div>'+
       '<div class="sheet-sub">'+spec.positions.length+' '+label.toLowerCase()+(spec.positions.length>1?'s':'')+' · log every '+spec.intervalH+'\u00a0hour'+(spec.intervalH>1?'s':'')+' while running'+(last!=null?' · last '+fmtAgo(last):' · not logged yet')+'.</div>'+
-      dueNote+rows+
+      dueNote+rows+whenField+
       '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button>'+
       '<button class="btn primary" id="bt-go">Log temperatures</button></div>');
     sheet.querySelector("#bt-go").addEventListener("click",function(){
       var temps=spec.positions.map(function(pos,i){ return { pos:pos, v:num(sheet.querySelector("#bt-"+i).value) }; });
-      commitBearings(mid, temps);
+      var w=sheet.querySelector("#bt-when"), recMs=w?parseLocalDT(w.value):null;
+      if(recMs!=null && recMs>Date.now()) recMs=Date.now();   // never a future reading
+      commitBearings(mid, temps, recMs);
     });
   }
-  function commitBearings(mid, temps){
+  function commitBearings(mid, temps, recordedMs){
     if(!temps.some(function(t){ return t.v!=null; })){ toast("Enter at least one temperature","warn"); return; }
-    var m=M(mid), spec=bearingSpec(m), c=curShift(), ts=new Date().toISOString();
+    var m=M(mid), spec=bearingSpec(m), c=curShift();
+    var nowMs=Date.now();
+    var readMs=(recordedMs!=null?recordedMs:nowMs);
+    var ts=new Date(readMs).toISOString();              // ts = when the reading was actually taken
+    var late=(nowMs-readMs)>=15*60000;                  // entered 15 min+ after the reading
+    var loggedAt=late?nowMs:null;                        // record entry time only when meaningfully later
     state.bearingLogs=state.bearingLogs||[];
     temps.forEach(function(t){ if(t.v==null) return;
       state.bearingLogs.push({ id:uid(), device:state.settings.device||"", machineId:mid, machine:m.name,
-        position:t.pos, bearingType:spec.type, tempC:t.v, ts:ts, shiftDate:c.date, shift:c.name, supervisor:c.supervisor||"", synced:false }); });
-    save(); closeSheet(); render(); toast(m.short+" "+spec.type+" temps logged","ok");
+        position:t.pos, bearingType:spec.type, tempC:t.v, ts:ts, loggedAt:loggedAt, shiftDate:c.date, shift:c.name, supervisor:c.supervisor||"", synced:false }); });
+    save(); closeSheet(); render(); toast(m.short+" "+spec.type+" temps logged"+(late?" (back-dated)":""),"ok");
   }
 
   function viewBatches(){
@@ -1631,7 +1679,7 @@
     var hb=heldBatchMap(), hbKeys=Object.keys(hb), hc=heldCoarseList();
     var warn="";
     if(hbKeys.length || hc.length){
-      var parts=hbKeys.map(function(no){ return "Batch "+esc(no); }).concat(hc.map(function(t){ return "Coarse "+esc(fmtDay(t.shiftDate))+" "+esc(t.shift); }));
+      var parts=hbKeys.map(function(k){ var p=k.split("|"); return "Batch "+esc(p[0])+(p[1]?" \u00b7 "+esc(p[1]):""); }).concat(hc.map(function(t){ return "Coarse "+esc(fmtDay(t.shiftDate))+" "+esc(t.shift); }));
       warn='<div class="panel" style="border:1px solid var(--err);background:rgba(220,60,60,.08);margin-bottom:14px">'+
         '<div style="display:flex;gap:8px;align-items:flex-start"><span style="color:var(--err);font-size:18px;line-height:1">\u26a0</span>'+
         '<div><b style="color:var(--err)">QC hold \u2014 marked unfit</b><div class="bhint" style="margin-top:3px">'+parts.join(" \u00b7 ")+'</div>'+
@@ -1673,7 +1721,7 @@
     var itemsHtml = DD.items.length ? DD.items.map(function(it,i){
       var w=itemWeight(it), rf=DD.customer?rateFor(DD.customer,it.grade):null;
       var right = rf ? (rf.rate!=null ? fmtMoney(rf.rate*w)+' <small class="muted">@'+rf.rate+(rf.note?' '+rf.note:'')+'</small>' : '<small style="color:var(--err)">no rate</small>') : '<small class="muted">'+w+' kg</small>';
-      var held = it.batchNo && hbMap[String(it.batchNo)];
+      var held = it.batchNo && hbMap[String(it.batchNo)+"|"+it.grade];
       var holdTag = held ? ' <span class="qchip" style="background:var(--err);color:#fff;font-size:9px">QC HOLD</span>' : '';
       return '<div class="weighrow"'+(held?' style="border-left:3px solid var(--err);padding-left:8px"':'')+'><span><b>'+esc(it.grade)+'</b>'+(it.batchNo?' <span class="muted">'+esc(it.batchNo)+'</span>':'')+holdTag+' \u00b7 '+(it.sacks!=null&&it.sacks!==""?esc(it.sacks)+' sacks \u00b7 ':'')+w+' kg</span>'+
         '<span style="display:flex;align-items:center;gap:8px">'+right+'<button class="wdel" data-del-item="'+i+'" aria-label="remove">\u2715</button></span></div>';
@@ -1732,7 +1780,7 @@
     if(DD.ownVehicle && !DD.driver){ toast("Pick the driver for our vehicle","warn"); return; }
     if(!DD.ownVehicle && !DD.vehicleNo){ toast("Enter the vehicle number","warn"); return; }
     var hbMap=heldBatchMap();
-    var heldNos=DD.items.filter(function(it){ return it.batchNo && hbMap[String(it.batchNo)]; }).map(function(it){ return it.batchNo; });
+    var heldNos=DD.items.filter(function(it){ return it.batchNo && hbMap[String(it.batchNo)+"|"+it.grade]; }).map(function(it){ return it.batchNo+" "+it.grade; });
     if(!force && heldNos.length){
       openSheet('<div class="sheet-h"><span class="led" style="background:radial-gradient(circle at 35% 30%,#ffb3b3,var(--err));box-shadow:0 0 10px 1px var(--err)"></span><b>QC hold on this load</b></div>'+
         '<div class="sheet-sub">Batch '+esc(heldNos.join(", "))+' was marked <b style="color:var(--err)">unfit</b> by QC. You can still dispatch \u2014 it\u2019s your call.</div>'+
@@ -1789,13 +1837,21 @@
     var arr=(state.qualityTests||[]).filter(function(q){ return q.kind==="batch" && String(q.batchNo)===String(no); });
     if(!arr.length) return null; arr.sort(function(a,b){ return (b.ts||0)-(a.ts||0); }); return arr[0];
   }
+  // QC is logged per grade/quality within a batch: every quality the batch yields gets its own inspection.
+  function qcLatestBatchQ(no, quality){
+    var arr=(state.qualityTests||[]).filter(function(q){ return q.kind==="batch" && String(q.batchNo)===String(no) && (q.quality||"")===(quality||""); });
+    if(!arr.length) return null; arr.sort(function(a,b){ return (b.ts||0)-(a.ts||0); }); return arr[0];
+  }
+  // Qualities to inspect for a batch = the grades actually taken off it.
+  function batchQualities(b){ return (b && b.qualities && b.qualities.length) ? b.qualities.slice() : []; }
   function qcLatestCoarse(date,shift){
     var arr=(state.qualityTests||[]).filter(function(q){ return q.kind==="coarse" && (q.shiftDate||"")===(date||"") && (q.shift||"")===(shift||""); });
     if(!arr.length) return null; arr.sort(function(a,b){ return (b.ts||0)-(a.ts||0); }); return arr[0];
   }
   function coarseShifts(){ var seen={}, out=[]; (state.runs||[]).forEach(function(r){ if(r.line==="coarse"){ var k=qcKeyCoarse(r.shiftDate,r.shift); if(!seen[k]){ seen[k]=1; out.push({ shiftDate:r.shiftDate, shift:r.shift, formulation:r.formulation||"", ts:r.end||r.ts||0 }); } } }); return out; }
-  function pendingQC(){ var n=0; (state.batches||[]).forEach(function(b){ if(!qcLatestBatch(b.no)) n++; }); coarseShifts().forEach(function(c){ if(!qcLatestCoarse(c.shiftDate,c.shift)) n++; }); return n; }
-  function heldBatchMap(){ var s={}; (state.qualityTests||[]).forEach(function(q){ if(q.kind==="batch"){ var t=qcLatestBatch(q.batchNo); if(t&&t.verdict==="hold") s[String(q.batchNo)]=t; } }); return s; }
+  function pendingQC(){ var n=0; (state.batches||[]).forEach(function(b){ batchQualities(b).forEach(function(q){ if(!qcLatestBatchQ(b.no,q)) n++; }); }); coarseShifts().forEach(function(c){ if(!qcLatestCoarse(c.shiftDate,c.shift)) n++; }); return n; }
+  // Held grades keyed by "batchNo|quality" so dispatch warns only for the exact grade on hold.
+  function heldBatchMap(){ var s={}; (state.qualityTests||[]).forEach(function(q){ if(q.kind==="batch"){ var t=qcLatestBatchQ(q.batchNo,q.quality); if(t&&t.verdict==="hold") s[String(q.batchNo)+"|"+(q.quality||"")]=t; } }); return s; }
   function heldCoarseList(){ var seen={}, out=[]; (state.qualityTests||[]).forEach(function(q){ if(q.kind!=="coarse") return; var k=qcKeyCoarse(q.shiftDate,q.shift); if(seen[k]) return; seen[k]=1; var t=qcLatestCoarse(q.shiftDate,q.shift); if(t&&t.verdict==="hold") out.push(t); }); return out; }
   function qcChip(t){
     if(!t) return '<span class="qchip shift" style="background:var(--steel);color:#0e1a08">Untested</span>';
@@ -1814,12 +1870,21 @@
     if(batches.length){
       out+='<div class="sheet-label" style="margin:4px 2px 8px">Special batches</div><div class="stack">';
       out+=batches.map(function(b){
-        var t=qcLatestBatch(b.no);
-        return '<div class="bcard" data-qc-batch="'+esc(b.no)+'" style="cursor:pointer">'+
-          '<div class="bhead"><div class="l"><span class="batchref" style="font-size:16px">'+esc(b.no)+'</span>'+
-            '<span class="formchip">'+esc(b.formulation||"")+'</span></div>'+qcChip(t)+'</div>'+
-          (t?'<div class="bhint">'+(t.tester?esc(t.tester)+' · ':'')+fmtDate(t.ts)+(t.params&&t.params.length?' · '+t.params.length+' readings':'')+(t.notes?' · '+esc(t.notes):'')+'</div>':'<div class="bhint">Tap to log test results</div>')+
-        '</div>';
+        var qs=batchQualities(b);
+        var header='<div class="bhead"><div class="l"><span class="batchref" style="font-size:16px">'+esc(b.no)+'</span>'+
+          '<span class="formchip">'+esc(b.formulation||"")+'</span></div>'+
+          (qs.length?'<span class="bstate cook" style="background:none;color:var(--ink-faint)">'+qs.filter(function(q){return qcLatestBatchQ(b.no,q);}).length+'/'+qs.length+' tested</span>':'')+'</div>';
+        if(!qs.length){
+          return '<div class="bcard">'+header+'<div class="bhint">No grades taken yet \u2014 mark qualities on the Batches tab, then each one shows here for QC.</div></div>';
+        }
+        var qrows=qs.map(function(q){
+          var t=qcLatestBatchQ(b.no,q);
+          return '<div class="qcrow" data-qc-batch="'+esc(b.no)+'" data-qc-q="'+esc(q)+'" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 2px;border-top:1px solid var(--line);cursor:pointer">'+
+            '<div style="min-width:0"><span class="qchip q-'+esc(q)+'">'+esc(q)+'</span>'+
+              (t?'<div class="bhint" style="margin-top:4px">'+(t.tester?esc(t.tester)+' \u00b7 ':'')+fmtDate(t.ts)+(t.params&&t.params.length?' \u00b7 '+t.params.length+' readings':'')+(t.attachmentUrl?' \u00b7 report \u2713':(t.attachmentPending?' \u00b7 report \u2934':''))+(t.notes?' \u00b7 '+esc(t.notes):'')+'</div>':'<div class="bhint" style="margin-top:4px">Tap to log test results</div>')+
+            '</div>'+qcChip(t)+'</div>';
+        }).join("");
+        return '<div class="bcard">'+header+qrows+'</div>';
       }).join("")+'</div>';
     }
     if(shifts.length){
@@ -1829,7 +1894,7 @@
         return '<div class="bcard" data-qc-coarse="'+esc(qcKeyCoarse(c.shiftDate,c.shift))+'" style="cursor:pointer">'+
           '<div class="bhead"><div class="l"><span class="batchref" style="font-size:15px">'+esc(fmtDay(c.shiftDate))+'</span>'+
             '<span class="qchip shift" style="background:var(--ember)">'+esc(c.shift)+'</span>'+(c.formulation?'<span class="formchip">'+esc(c.formulation)+'</span>':'')+'</div>'+qcChip(t)+'</div>'+
-          (t?'<div class="bhint">'+(t.tester?esc(t.tester)+' · ':'')+fmtDate(t.ts)+(t.notes?' · '+esc(t.notes):'')+'</div>':'<div class="bhint">Tap to log test results</div>')+
+          (t?'<div class="bhint">'+(t.tester?esc(t.tester)+' · ':'')+fmtDate(t.ts)+(t.attachmentUrl?' · report \u2713':(t.attachmentPending?' · report \u2934':''))+(t.notes?' · '+esc(t.notes):'')+'</div>':'<div class="bhint">Tap to log test results</div>')+
         '</div>';
       }).join("")+'</div>';
     }
@@ -1838,27 +1903,38 @@
 
   /* ---- QC test sheet (append-only; latest result is the current verdict) ---- */
   var QT=null;
-  function openQcBatch(no){
+  function openQcBatch(no, quality){
+    quality=quality||"";
     var b=null; for(var i=0;i<(state.batches||[]).length;i++) if(String(state.batches[i].no)===String(no)){ b=state.batches[i]; break; }
-    var prev=qcLatestBatch(no);
-    QT={ kind:"batch", batchNo:no, label:"Batch "+no, sub:(b?b.formulation:"")||"",
-         params:(prev&&prev.params?JSON.parse(JSON.stringify(prev.params)):[]), verdict:(prev?prev.verdict:"pass"), tester:(prev?prev.tester:"")||"", notes:"" };
+    var prev=qcLatestBatchQ(no, quality);
+    QT={ kind:"batch", batchNo:no, quality:quality, label:"Batch "+no+(quality?" \u00b7 "+quality:""), sub:(b?b.formulation:"")||"",
+         params:(prev&&prev.params?JSON.parse(JSON.stringify(prev.params)):[]), verdict:(prev?prev.verdict:"pass"), tester:(prev?prev.tester:"")||"", notes:"",
+         attachmentUrl:(prev&&prev.attachmentUrl)||"", attachmentName:(prev&&prev.attachmentName)||"", newFileDataUrl:null, newFileName:"", newFileType:"" };
     renderQcSheet();
   }
   function openQcCoarse(key){
     var p=String(key).split("|"), date=p[0], shift=p[1];
     var prev=qcLatestCoarse(date,shift);
     QT={ kind:"coarse", shiftDate:date, shift:shift, label:"Coarse · "+fmtDay(date)+" "+shift, sub:"",
-         params:(prev&&prev.params?JSON.parse(JSON.stringify(prev.params)):[]), verdict:(prev?prev.verdict:"pass"), tester:(prev?prev.tester:"")||"", notes:"" };
+         params:(prev&&prev.params?JSON.parse(JSON.stringify(prev.params)):[]), verdict:(prev?prev.verdict:"pass"), tester:(prev?prev.tester:"")||"", notes:"",
+         attachmentUrl:(prev&&prev.attachmentUrl)||"", attachmentName:(prev&&prev.attachmentName)||"", newFileDataUrl:null, newFileName:"", newFileType:"" };
     renderQcSheet();
   }
   function renderQcSheet(){
-    var prev = QT.kind==="batch" ? qcLatestBatch(QT.batchNo) : qcLatestCoarse(QT.shiftDate,QT.shift);
+    var prev = QT.kind==="batch" ? qcLatestBatchQ(QT.batchNo, QT.quality) : qcLatestCoarse(QT.shiftDate,QT.shift);
     var paramsHtml = QT.params.length ? QT.params.map(function(p,i){
       return '<div class="weighrow"><span><b>'+esc(p.name)+'</b> · '+esc(p.value)+(p.unit?' '+esc(p.unit):'')+'</span>'+
         '<button class="wdel" data-qp-del="'+i+'" aria-label="remove">\u2715</button></div>';
     }).join("") : '<div class="hint" style="margin:4px 0 10px">No readings yet. Add each test parameter and its value.</div>';
     var dl='<datalist id="qc-names">'+QC_PARAM_SUGGEST.map(function(n){ return '<option value="'+esc(n)+'">'; }).join("")+'</datalist>';
+    var attachHtml='';
+    if(QT.newFileDataUrl){
+      var isImg=(QT.newFileType||"").indexOf("image")===0;
+      attachHtml='<div class="weighrow"><span>'+(isImg?'<img src="'+QT.newFileDataUrl+'" style="height:32px;width:32px;object-fit:cover;border-radius:6px;vertical-align:middle;margin-right:8px">':'')+esc(QT.newFileName||"file")+' <small class="muted">new</small></span>'+
+        '<button class="wdel" id="qc-file-clear" aria-label="remove">\u2715</button></div>';
+    } else if(QT.attachmentUrl){
+      attachHtml='<div class="weighrow"><span>Report: <a href="'+esc(QT.attachmentUrl)+'" target="_blank" rel="noopener" style="color:var(--elec)">view</a> <small class="muted">'+esc(QT.attachmentName||"")+'</small></span></div>';
+    }
     openSheet('<div class="sheet-h"><span class="led" style="background:radial-gradient(circle at 35% 30%,#bfe3ff,#3aa0ff);box-shadow:0 0 10px 1px #3aa0ff"></span><b>'+esc(QT.label)+'</b></div>'+
       '<div class="sheet-sub">'+(QT.sub?esc(QT.sub)+' · ':'')+'Log the lab results, then mark Pass or Hold.'+(prev?' Last: '+(prev.verdict==="hold"?'HOLD':'Passed')+' '+esc(fmtDate(prev.ts)):'')+'</div>'+
       dl+
@@ -1874,6 +1950,10 @@
       '</div>'+
       '<div class="field-inline" style="margin-top:10px"><div class="field"><label>Tested by</label><input id="qc-tester" type="text" autocomplete="off" placeholder="QC name" value="'+esc(QT.tester||"")+'"></div></div>'+
       '<div class="field"><label>Notes <span class="muted" style="text-transform:none;letter-spacing:0">opt.</span></label><textarea id="qc-notes" rows="2" placeholder="observations / reason for hold">'+esc(QT.notes||"")+'</textarea></div>'+
+      '<div class="sheet-label" style="margin-top:6px">Lab report <span class="muted" style="text-transform:none;letter-spacing:0">opt. \u2014 photo or PDF</span></div>'+
+      attachHtml+
+      '<label class="btn ghost block" style="margin-top:6px;cursor:pointer">'+((QT.attachmentUrl||QT.newFileDataUrl)?'Replace report':'Attach photo / PDF')+
+        '<input id="qc-file" type="file" accept="image/*,application/pdf" capture="environment" style="display:none"></label>'+
       '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button>'+
       '<button class="btn primary" id="qc-save">Save result</button></div>');
     sheet.querySelector("#qp-add").addEventListener("click",function(){
@@ -1887,20 +1967,54 @@
     });
     sheet.querySelectorAll("[data-qp-del]").forEach(function(el){ el.addEventListener("click",function(){ QT.params.splice(parseInt(el.getAttribute("data-qp-del"),10),1); renderQcSheet(); }); });
     sheet.querySelectorAll("[data-qc-verdict]").forEach(function(el){ el.addEventListener("click",function(){ QT.tester=(sheet.querySelector("#qc-tester").value||"").trim(); QT.notes=sheet.querySelector("#qc-notes").value||""; QT.verdict=el.getAttribute("data-qc-verdict"); renderQcSheet(); }); });
+    var fileIn=sheet.querySelector("#qc-file");
+    if(fileIn) fileIn.addEventListener("change",function(ev){
+      var f=ev.target.files&&ev.target.files[0]; if(!f) return;
+      if(f.size>8*1024*1024){ toast("File too large (max 8 MB)","warn"); ev.target.value=""; return; }
+      QT.tester=(sheet.querySelector("#qc-tester").value||"").trim(); QT.notes=sheet.querySelector("#qc-notes").value||"";
+      var fr=new FileReader();
+      fr.onload=function(){ QT.newFileDataUrl=fr.result; QT.newFileName=f.name; QT.newFileType=f.type||""; renderQcSheet(); };
+      fr.onerror=function(){ toast("Could not read that file","err"); };
+      fr.readAsDataURL(f);
+    });
+    var fileClear=sheet.querySelector("#qc-file-clear");
+    if(fileClear) fileClear.addEventListener("click",function(){ QT.tester=(sheet.querySelector("#qc-tester").value||"").trim(); QT.notes=sheet.querySelector("#qc-notes").value||""; QT.newFileDataUrl=null; QT.newFileName=""; QT.newFileType=""; renderQcSheet(); });
     sheet.querySelector("#qc-save").addEventListener("click",commitQcTest);
   }
   function commitQcTest(){
     QT.tester=(sheet.querySelector("#qc-tester").value||"").trim();
     QT.notes=sheet.querySelector("#qc-notes").value||"";
-    if(!QT.params.length && !QT.notes){ toast("Add at least one reading or a note","warn"); return; }
+    if(!QT.params.length && !QT.notes && !QT.newFileDataUrl && !QT.attachmentUrl){ toast("Add a reading, a note, or a report","warn"); return; }
     var rec={ id:uid(), device:state.settings.device||"", ts:Date.now(), kind:QT.kind,
-      batchNo:(QT.kind==="batch"?QT.batchNo:null), shiftDate:(QT.kind==="coarse"?QT.shiftDate:null), shift:(QT.kind==="coarse"?QT.shift:null),
-      params:QT.params.slice(), verdict:(QT.verdict==="hold"?"hold":"pass"), tester:QT.tester, notes:QT.notes, synced:false };
+      batchNo:(QT.kind==="batch"?QT.batchNo:null), quality:(QT.kind==="batch"?(QT.quality||""):null), shiftDate:(QT.kind==="coarse"?QT.shiftDate:null), shift:(QT.kind==="coarse"?QT.shift:null),
+      params:QT.params.slice(), verdict:(QT.verdict==="hold"?"hold":"pass"), tester:QT.tester, notes:QT.notes,
+      attachmentUrl:"", attachmentName:"", synced:false };
+    var newFile=QT.newFileDataUrl, newName=QT.newFileName||"report";
+    // keep an existing report if no new file was chosen
+    if(!newFile && QT.attachmentUrl){ rec.attachmentUrl=QT.attachmentUrl; rec.attachmentName=QT.attachmentName||""; }
+    var held=(rec.verdict==="hold");
+    if(newFile){
+      rec.attachmentName=newName; rec.attachmentPending=true;
+      var online=(syncTarget()==="supabase") && (typeof navigator==="undefined" || navigator.onLine!==false);
+      state.qualityTests.push(rec); QT=null; save(); closeSheet(); render();
+      if(online){
+        toast(held?"Marked HOLD \u00b7 uploading report\u2026":"Saved \u00b7 uploading report\u2026","ok");
+        uploadDataUrl(rec.id, rec.attachmentName, newFile).then(function(url){
+          rec.attachmentUrl=url; rec.attachmentPending=false; rec.synced=false; save(); if(!sheetIsOpen()) render();
+        }).catch(function(){ if(!qcEnqueueUpload(rec.id, rec.attachmentName, newFile)) toast("Report too large to queue","warn"); });
+        scheduleAutoSync(700);
+      } else {
+        var ok=qcEnqueueUpload(rec.id, rec.attachmentName, newFile);
+        toast(ok?"Saved \u2014 report uploads when online":"Saved \u2014 report too big to queue offline","warn");
+      }
+      return;
+    }
     state.qualityTests.push(rec); QT=null;
     save(); closeSheet(); render();
-    toast(rec.verdict==="hold"?"Marked HOLD \u2014 dispatch will be warned":"Result saved \u00b7 passed","ok");
+    toast(held?"Marked HOLD \u2014 dispatch will be warned":"Result saved \u00b7 passed","ok");
     scheduleAutoSync(500);
   }
+
 
   function viewHistory(){
     if(!state.runs.length) return '<div class="view-head"><h1>History</h1></div>'+
@@ -1917,8 +2031,9 @@
                       : '<span class="batchref" style="font-size:12px">'+esc(r.batchNo)+'</span>'+(r.quality?'<br>'+qchip(r.quality):'');
       var wt = (r.weightKg!==""&&r.weightKg!=null) ? esc(r.weightKg)+' kg' : (r.machineId==="R4" ? '<span class="muted">pending</span>' : '—');
       var mlabel = r.short || shortName(r.machineId);
+      var sup = r.supervisor ? '<br><span class="muted" style="font-size:10px">\uD83D\uDC64 '+esc(r.supervisor)+'</span>' : '';
       return '<tr class="hrow" data-edit-run="'+esc(r.id)+'" style="cursor:pointer"><td><span class="synced '+(r.synced?"yes":"")+'"></span></td>'+
-        '<td><b>'+esc(mlabel)+'</b>'+((r.passes||1)>1?' <span class="muted" style="font-size:10px">×'+r.passes+'</span>':'')+'<br><span class="muted" style="font-size:11px">'+when+'</span></td>'+
+        '<td><b>'+esc(mlabel)+'</b>'+((r.passes||1)>1?' <span class="muted" style="font-size:10px">×'+r.passes+'</span>':'')+'<br><span class="muted" style="font-size:11px">'+when+'</span>'+sup+'</td>'+
         '<td>'+col2+'</td>'+
         '<td class="tnum">'+fmtDur(r.runtimeMin)+'</td>'+
         '<td class="tnum">'+energy+'</td>'+
@@ -1950,6 +2065,7 @@
         '<div class="field"><label>Shift</label><select id="e-shift"><option value="Day"'+(r.shift==="Day"?" selected":"")+'>Day</option><option value="Night"'+(r.shift==="Night"?" selected":"")+'>Night</option></select></div>'+
         '<div class="field"><label>Shift date</label><input id="e-sdate" type="date" value="'+esc(r.shiftDate||"")+'"></div></div>';
     }
+    rows+='<div class="field"><label>Supervisor</label><input id="e-sup" type="text" autocomplete="off" placeholder="name" value="'+esc(r.supervisor==null?"":r.supervisor)+'"></div>';
     rows+='<div class="field-inline">'+
       '<div class="field"><label>Run time (min)</label><input id="e-rt" type="number" inputmode="decimal" value="'+esc(r.runtimeMin==null?"":r.runtimeMin)+'"></div>'+
       '<div class="field"><label>Workers</label><input id="e-wk" type="number" inputmode="numeric" value="'+esc(r.workers==null?"":r.workers)+'"></div></div>';
@@ -1975,6 +2091,7 @@
       }
       var ert=sheet.querySelector("#e-rt"); if(ert) r.runtimeMin=num(ert.value);
       var ewk=sheet.querySelector("#e-wk"); if(ewk) r.workers=num(ewk.value);
+      var esup=sheet.querySelector("#e-sup"); if(esup) r.supervisor=(esup.value||"").trim();
       var efw=sheet.querySelector("#e-fw"); if(efw) r.firewoodKg=num(efw.value);
       var ekwh=sheet.querySelector("#e-kwh"); if(ekwh) r.kWh=num(ekwh.value);
       var ewt=sheet.querySelector("#e-wt"); if(ewt) r.weightKg=num(ewt.value);
@@ -1989,9 +2106,12 @@
     var r=findRun(id); if(!r){ closeSheet(); return; }
     var mlabel=r.short||shortName(r.machineId)||r.machine||"";
     var whenTxt=r.shift?(fmtDay(r.shiftDate)+' · '+r.shift):fmtDate(r.end);
+    var m=M(r.machineId);
+    var crumbNote=(m && m.crumb && r.crumbAdded>0 && r.tyreType)
+      ? '<div class="hint" style="margin-top:6px">'+Math.round(r.crumbAdded*100)/100+' kg of '+esc(TYRES[r.tyreType].label)+' crumb added by this entry will be removed from stock.</div>' : '';
     openSheet('<div class="sheet-h"><b>Delete this entry?</b></div>'+
       '<div class="sheet-sub"><span class="batchref">'+esc(mlabel)+'</span> · '+esc(whenTxt)+'</div>'+
-      '<div class="hint">Permanently removes this entry'+(r.synced?' from this device and the database':'')+'. This cannot be undone.</div>'+
+      '<div class="hint">Permanently removes this entry'+(r.synced?' from this device and the database':'')+'. This cannot be undone.</div>'+crumbNote+
       '<div class="sheet-actions"><button class="btn ghost" data-act="close">Keep entry</button>'+
       '<button class="btn danger" id="del-go">Yes, delete</button></div>');
     sheet.querySelector("#del-go").addEventListener("click",function(){ deleteRun(id); });
@@ -2000,6 +2120,9 @@
     var idx=-1, r=null;
     for(var i=0;i<state.runs.length;i++){ if(state.runs[i].id===id){ r=state.runs[i]; idx=i; break; } }
     if(idx<0){ closeSheet(); return; }
+    var m=M(r.machineId);
+    // if this grinder entry had live-weighed crumb into stock, pull it back out
+    if(m && m.crumb && r.crumbAdded>0 && r.tyreType) takeCrumb(TYRES[r.tyreType].store, r.crumbAdded);
     var wasSynced=!!r.synced;
     state.runs.splice(idx,1);
     if(wasSynced && syncTarget()==="supabase"){
@@ -2009,6 +2132,94 @@
     save(); closeSheet(); render();
     toast("Entry deleted","ok");
     if(wasSynced) scheduleAutoSync(400);
+  }
+
+  /* ===================== bearing / bush temperature log ===================== */
+  // One "event" = all positions logged for a machine at the same reading time.
+  function bearingEvents(){
+    var map={};
+    (state.bearingLogs||[]).forEach(function(x){
+      var key=x.machineId+"|"+x.ts;
+      if(!map[key]) map[key]={ machineId:x.machineId, machine:x.machine||shortName(x.machineId), ts:x.ts, tsMs:+new Date(x.ts),
+        bearingType:x.bearingType||"bearing", supervisor:x.supervisor||"", shift:x.shift||"", shiftDate:x.shiftDate||"",
+        loggedAt:(x.loggedAt!=null?+new Date(x.loggedAt):null), temps:[] };
+      map[key].temps.push({ pos:x.position, v:x.tempC });
+    });
+    var arr=Object.keys(map).map(function(k){ return map[k]; });
+    // compute the gap since the previous reading on the same machine
+    var byMach={};
+    arr.forEach(function(ev){ (byMach[ev.machineId]=byMach[ev.machineId]||[]).push(ev); });
+    Object.keys(byMach).forEach(function(mid){
+      var list=byMach[mid].sort(function(a,b){ return a.tsMs-b.tsMs; });
+      list.forEach(function(ev,i){ ev.gapMin = i>0 ? Math.round((ev.tsMs-list[i-1].tsMs)/60000) : null; });
+    });
+    return arr.sort(function(a,b){ return b.tsMs-a.tsMs; });
+  }
+  function bearingGapBad(ev){
+    var m=M(ev.machineId), spec=m?bearingSpec(m):null;
+    if(!spec || ev.gapMin==null) return false;
+    return ev.gapMin > spec.intervalH*60*1.5;            // > 1.5x the expected interval = likely a missed reading
+  }
+  function viewBearings(){
+    var monitored=MACHINES.filter(function(m){ return !!bearingSpec(m); });
+    var due=dueMachines();
+    var events=bearingEvents();
+    var lateCount=events.filter(function(e){ return e.loggedAt!=null; }).length;
+    var gapCount=events.filter(bearingGapBad).length;
+    var head='<div class="view-head"><h1>Bearings</h1><div class="meta">'+(state.bearingLogs||[]).length+' readings · '+due.length+' due now</div></div>';
+
+    var stats='<div class="statgrid" style="margin-bottom:14px">'+
+      stat(events.length,"","logged")+
+      stat(due.length,"","due now")+
+      stat(lateCount,"","back-dated")+
+      stat(gapCount,"","gaps")+'</div>';
+
+    // live status of every monitored machine that is currently running
+    var liveCards=monitored.map(function(m){
+      var st=state.machines[m.id], spec=bearingSpec(m), label=spec.type==="bush"?"Bush":"Bearing";
+      var running=!!(st&&st.running&&!st.running.paused&&!st.down);
+      if(!running) return "";
+      var last=lastBearingLog(m.id), isDue=bearingDue(m);
+      var sub = last!=null ? ('last '+fmtAgo(last)) : 'not logged yet';
+      var right = isDue
+        ? '<span class="bstate cook" style="background:var(--amber);color:#1a1407">⚠ Log now</span>'
+        : '<span class="bstate ready" style="background:none;color:var(--ok)">on schedule</span>';
+      return '<div class="bcard"'+(isDue?' style="border:1px solid var(--amber)"':'')+'>'+
+        '<div class="bhead"><div class="l"><span class="batchref" style="font-size:15px">'+esc(m.short)+'</span>'+
+          '<span class="formchip">'+label+' · every '+spec.intervalH+'h</span></div>'+right+'</div>'+
+        '<div class="bhint">'+esc(m.name)+' · '+sub+'</div>'+
+        '<button class="btn '+(isDue?'primary':'ghost')+' block" data-bearings="'+m.id+'" style="margin-top:8px">Log temperatures</button></div>';
+    }).filter(Boolean).join("");
+    var liveSection = liveCards
+      ? '<div class="sheet-label" style="margin:4px 2px 8px">Running now</div><div class="stack">'+liveCards+'</div>'
+      : '<div class="hint" style="margin:2px 2px 12px">No monitored machine is running right now. Readings are due every 2–3 hours while a refiner, grinder or cracker is running.</div>';
+
+    if(!events.length)
+      return head+stats+liveSection+empty('<path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0Z"/>',
+        "No temperatures logged yet","When a supervisor records bearing or bush temps, every reading lands here with its time and who logged it.");
+
+    var rows=events.map(function(ev){
+      var m=M(ev.machineId), spec=m?bearingSpec(m):null, label=(ev.bearingType==="bush")?"Bush":"Bearing";
+      var temps=ev.temps.slice().sort(function(a,b){ return (a.pos>b.pos?1:-1); }).map(function(t){
+        return '<span class="formchip" style="font-family:var(--mono)">'+esc(t.pos)+': '+(t.v==null?'—':esc(t.v)+'°')+'</span>';
+      }).join(" ");
+      var lateTag = ev.loggedAt!=null ? ' <span class="qchip" style="background:var(--steel);color:#0e1a08;font-size:9px">entered '+esc(fmtDur(Math.round((ev.loggedAt-ev.tsMs)/60000)))+' late</span>' : '';
+      var gapBad=bearingGapBad(ev);
+      var gapLine = ev.gapMin!=null
+        ? '<div class="bhint"'+(gapBad?' style="color:var(--amber)"':'')+'>'+(gapBad?'⚠ ':'')+fmtDur(ev.gapMin)+' since previous reading'+(gapBad?' — a reading may have been missed':'')+'</div>'
+        : '';
+      var who = ev.supervisor ? '👤 '+esc(ev.supervisor) : '<span class="muted">no supervisor</span>';
+      return '<div class="bcard"'+(gapBad?' style="border-left:3px solid var(--amber)"':'')+'>'+
+        '<div class="bhead"><div class="l"><span class="batchref" style="font-size:15px">'+esc(ev.machine||shortName(ev.machineId))+'</span>'+
+          '<span class="formchip">'+label+'</span>'+(ev.shift?'<span class="qchip shift" style="font-size:9px">'+esc(ev.shift)+'</span>':'')+'</div>'+
+          '<span class="muted" style="font-size:11px">'+esc(fmtDate(ev.tsMs))+lateTag+'</span></div>'+
+        '<div style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0">'+temps+'</div>'+
+        '<div class="bhint">'+who+(ev.shiftDate?' · '+esc(fmtDay(ev.shiftDate)):'')+'</div>'+
+        gapLine+'</div>';
+    }).join("");
+
+    return head+stats+liveSection+
+      '<div class="sheet-label" style="margin:16px 2px 8px">Log history</div><div class="stack">'+rows+'</div>';
   }
 
   function viewReports(){
@@ -2540,6 +2751,7 @@
     else if(active==="dispatch") html=viewDispatch();
     else if(active==="quality") html=viewQuality();
     else if(active==="history") html=viewHistory();
+    else if(active==="bearings") html=viewBearings();
     else if(active==="reports") html=viewReports();
     else if(active==="settings") html=viewSettings();
     var sameTab=(lastTab===active);
@@ -2573,7 +2785,7 @@
     if((t=e.target.closest("[data-weigh]"))){ openWeighSheet(t.getAttribute("data-weigh")); return; }
     if((t=e.target.closest("[data-pack]"))){ openPackSheet(t.getAttribute("data-pack")); return; }
     if((t=e.target.closest("[data-load]"))){ openLoadDetail(t.getAttribute("data-load")); return; }
-    if((t=e.target.closest("[data-qc-batch]"))){ openQcBatch(t.getAttribute("data-qc-batch")); return; }
+    if((t=e.target.closest("[data-qc-batch]"))){ openQcBatch(t.getAttribute("data-qc-batch"), t.getAttribute("data-qc-q")||""); return; }
     if((t=e.target.closest("[data-qc-coarse]"))){ openQcCoarse(t.getAttribute("data-qc-coarse")); return; }
     if((t=e.target.closest("[data-edit-run]"))){ openEditRun(t.getAttribute("data-edit-run")); return; }
     if((t=e.target.closest("[data-custdel]"))){ var cd=t.getAttribute("data-custdel");
@@ -2647,7 +2859,7 @@
   // Smart auto-sync: periodic catch-up, on reconnect, and when the app regains focus.
   setInterval(autoSync, 120000);
   // Pull the shared master copy so each phone mirrors the others (skip while a sheet is open).
-  setInterval(function(){ if(!sheetIsOpen()){ pullShared(); pullQuality(); } }, 20000);
+  setInterval(function(){ if(!sheetIsOpen()){ pullShared(); pullQuality(); } flushQcUploads(); }, 20000);
   // Live status heartbeat: re-announce running machines so the monitor stays current.
   setInterval(postAllStatus, 60000);
   setTimeout(postAllStatus, 4000);
@@ -2657,11 +2869,11 @@
   // Auto shift-by-clock + refresh bearing-due warnings on the Machines screen.
   setInterval(function(){ refreshAutoShift(); if(active==="machines") render(); }, 60000);
   if(typeof window!=="undefined"){
-    window.addEventListener("online", function(){ scheduleAutoSync(1500); pullShared(); pullQuality(); });
-    window.addEventListener("focus", function(){ scheduleAutoSync(1500); pullShared(); pullQuality(); });
+    window.addEventListener("online", function(){ scheduleAutoSync(1500); pullShared(); pullQuality(); flushQcUploads(); });
+    window.addEventListener("focus", function(){ scheduleAutoSync(1500); pullShared(); pullQuality(); flushQcUploads(); });
   }
   if(typeof document!=="undefined"){
-    document.addEventListener("visibilitychange", function(){ if(!document.hidden){ scheduleAutoSync(1500); pullShared(); pullQuality(); } });
+    document.addEventListener("visibilitychange", function(){ if(!document.hidden){ scheduleAutoSync(1500); pullShared(); pullQuality(); flushQcUploads(); } });
   }
 
   /* toast */
@@ -2703,6 +2915,9 @@
       }
     }});
     pullQuality();
+   
+    flushQcUploads();
+   
   }, 1500);
   if("serviceWorker" in navigator){ try{ navigator.serviceWorker.register("sw.js"); }catch(e){} }
 })();
