@@ -380,6 +380,9 @@
   .hvdethead h2{ margin:0; font-size:21px; font-weight:800; }
   .hvdethead .muted{ font-family:var(--mono); font-size:13px; }
   .hvmiss{ color:var(--amber); background:rgba(232,161,58,.13); border:1px solid #5a431f; border-radius:6px; font-size:11px; font-weight:700; padding:3px 8px; }
+  .acloads{ margin-top:9px; border-top:1px solid var(--line); }
+  .acload{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:7px 0 0; font-size:12.5px; }
+  .acload .muted{ font-family:var(--mono); font-size:11.5px; }
   @media (prefers-reduced-motion: reduce){ *{ animation:none !important; transition:none !important; } }
 </style>
 </head>
@@ -557,6 +560,7 @@
     if(!s.leftout) s.leftout={};
     if(!s.shift) s.shift={date:"",name:autoShift(),supervisor:""};
     if(s.shift.supervisor==null) s.shift.supervisor="";
+    s.shift.date="";   // never carry a date across loads — supervisor must pick the production date (calendar) each session
     if(!s.crumb) s.crumb={truck:0,bike:0};
     if(s.settings.autoSync==null) s.settings.autoSync=true;
     if(!s.settings.supabaseUrl) s.settings.supabaseUrl=SUPABASE_URL;
@@ -654,7 +658,7 @@
     postStatus(mid,"running");
   }
   function startRefiner(mid, batchId, quality, sourceBatches, elecStart, hourStart){
-    state.machines[mid].running={ batchId:batchId, quality:quality||"", sourceBatches:sourceBatches||[], elecStart:(elecStart==null?"":elecStart), hourStart:(hourStart==null?"":hourStart), segStart:Date.now(), accumMs:0, paused:false };
+    state.machines[mid].running={ batchId:batchId, quality:quality||"", sourceBatches:sourceBatches||[], elecStart:(elecStart==null?"":elecStart), hourStart:(hourStart==null?"":hourStart), shiftDate:curShift().date, shift:curShift().name, segStart:Date.now(), accumMs:0, paused:false };
     save(); closeSheet(); render();
     var b=batch(batchId); toast(M(mid).name+" started · "+b.no+(quality?" · "+quality:""),"ok");
     postStatus(mid,"running");
@@ -665,12 +669,12 @@
     save(); closeSheet(); render(); toast(m.short+" started · "+shift+(tyreType?" · "+TYRES[tyreType].label:""),"ok");
     postStatus(mid,"running");
   }
-  function startAutoclaveCoarse(mid, formName, cap, shift, shiftDate, loadedAt){
+  function startAutoclaveCoarse(mid, formName, cap, shift, shiftDate, loadedAt, batchNo){
     var m=M(mid);
     if(crumbAvail("bike") < cap){ toast("Not enough bike crumb — "+crumbAvail("bike")+" / "+cap+" kg","err"); return; }
     takeCrumb("bike", cap);
-    state.machines[mid].running={ shiftwise:true, line:"coarse", autoclaveId:m.id, formulation:formName, capacity:cap, shift:shift, shiftDate:shiftDate, loadedAt:(loadedAt!=null?loadedAt:Date.now()), segStart:Date.now(), accumMs:0, paused:false };
-    save(); closeSheet(); render(); toast(m.name+" loaded · coarse","ok");
+    state.machines[mid].running={ shiftwise:true, line:"coarse", autoclaveId:m.id, formulation:formName, capacity:cap, shift:shift, shiftDate:shiftDate, loadBatchNo:(batchNo||""), loadedAt:(loadedAt!=null?loadedAt:Date.now()), segStart:Date.now(), accumMs:0, paused:false };
+    save(); closeSheet(); render(); toast(m.name+" loaded · coarse"+(batchNo?" · batch "+batchNo:""),"ok");
     postStatus(mid,"running");
   }
   function pauseMachine(mid){
@@ -712,6 +716,12 @@
       if(run) postStatus(mid, run.paused?"paused":"running");
     });
   }
+  // one autoclave loading record (batch + load/unload times) for the autoclave logbook audit
+  function acLoadEntry(run, fields, end){
+    return { batchNo:(run.loadBatchNo||""),
+      loadedAt:(run.loadedAt!=null?run.loadedAt:(fields.loadedAt!=null?fields.loadedAt:null)),
+      unloadedAt:(fields.unloadedAt!=null?fields.unloadedAt:end) };
+  }
   function commitRun(mid, fields){
     var m=M(mid), run=state.machines[mid].running; if(!run) return;
     var end=Date.now();
@@ -747,6 +757,7 @@
         if(m.kind==="autoclave" && !cex.autoclaveId) cex.autoclaveId=m.id;
         if(fields.loadedAt!=null && cex.loadedAt==null) cex.loadedAt=fields.loadedAt;
         if(fields.unloadedAt!=null) cex.unloadedAt=fields.unloadedAt;
+        if(m.kind==="autoclave"){ cex.loadings=(cex.loadings||[]).concat([acLoadEntry(run,fields,end)]); }
       } else {
         state.runs.push({
           id:uid(), device:state.settings.device||"", machine:m.name, machineId:m.id, short:m.short, kind:m.kind, line:run.line, shiftwise:true,
@@ -760,6 +771,7 @@
           firewoodKg:fields.firewoodKg==null?"":fields.firewoodKg, workers:fields.workers==null?"":fields.workers,
           weightKg:"", weighEntries:(m.outWeight?(run.weighEntries||[]):undefined), needsWeigh:!!m.outWeight,
           crumbAdded:(run.crumbAdded||0),
+          loadings:(m.kind==="autoclave"?[acLoadEntry(run,fields,end)]:undefined),
           synced:false, createdAt:end
         });
       }
@@ -800,7 +812,7 @@
       id:uid(), device:state.settings.device||"", machine:m.name, machineId:m.id, short:m.short, kind:m.kind, line:"special",
       batchId:b.id, batchNo:b.no, capacity:b.capacity, formulation:b.formulation,
       autoclaveId:b.autoclaveId||"", paired:!!b.paired, passes:1,
-      shiftDate:curShift().date, shift:curShift().name, supervisor:curShift().supervisor||"",
+      shiftDate:(run.shiftDate||curShift().date), shift:(run.shift||curShift().name), supervisor:curShift().supervisor||"",
       quality:run.quality||"", start:run.segStart||run.start||end, end:end, runtimeMin:runtimeMin,
       hoursRun:Math.round((runtimeMin/60)*100)/100,
       loadedAt:(fields.loadedAt!=null?fields.loadedAt:null), unloadedAt:(fields.unloadedAt!=null?fields.unloadedAt:null),
@@ -892,7 +904,7 @@
     }
     var c=curShift();
     state.conversions.push({ id:uid(), device:state.settings.device||"", batchNo:specialRow.batchNo, qty:qty, stage:stage,
-      ts:end, shiftDate:c.date, shift:c.name, supervisor:c.supervisor||"", synced:false });
+      ts:end, shiftDate:(c.date||specialRow.shiftDate||""), shift:(c.name||specialRow.shift||""), supervisor:c.supervisor||"", synced:false });
   }
   function convertAtWeigh(runId, qty){
     var r=weighRow(runId); if(!r) return;
@@ -1538,8 +1550,8 @@
         '<div class="num-suffix"><input id="bt-'+i+'" type="number" inputmode="decimal" placeholder="temperature"><span class="sfx">°C</span></div></div>';
     }).join("");
     var dueNote = bearingDue(m) ? '<div class="hint" style="color:var(--amber);margin-top:-2px">⚠ Overdue — log now.</div>' : '';
-    var whenField='<div class="field" style="margin-top:6px"><label>Recorded at <span class="muted" style="text-transform:none;letter-spacing:0">— change if the reading was taken earlier</span></label>'+
-      '<input id="bt-when" type="datetime-local" value="'+esc(localDTValue(Date.now()))+'" max="'+esc(localDTValue(Date.now()))+'"></div>';
+    var whenField='<div class="field" style="margin-top:6px"><label>Recorded at <span class="muted" style="text-transform:none;letter-spacing:0">— leave blank to log now, or pick the date &amp; time it was read</span></label>'+
+      '<input id="bt-when" type="datetime-local" value="" max="'+esc(localDTValue(Date.now()))+'"></div>';
     openSheet('<div class="sheet-h"><span class="led" style="background:radial-gradient(circle at 35% 30%,#9fe0ea,var(--elec))"></span><b>'+label+' temps — '+esc(m.name)+'</b></div>'+
       '<div class="sheet-sub">'+spec.positions.length+' '+label.toLowerCase()+(spec.positions.length>1?'s':'')+' · log every '+spec.intervalH+'\u00a0hour'+(spec.intervalH>1?'s':'')+' while running'+(last!=null?' · last '+fmtAgo(last):' · not logged yet')+'.</div>'+
       dueNote+rows+whenField+
@@ -2137,10 +2149,22 @@
     if(r.weightKg!==""&&r.weightKg!=null) facts.push(esc(r.weightKg)+' kg out');
     if(r.workers!==""&&r.workers!=null) facts.push(esc(r.workers)+' crew');
     var sup=r.supervisor?('\uD83D\uDC64 '+esc(r.supervisor)):'<span style="color:var(--amber)">no supervisor</span>';
+    // autoclave loadings — batch number + load/unload time per loading, for the logbook audit
+    var acBlock="";
+    if(r.kind==="autoclave"){
+      var loads=(r.loadings&&r.loadings.length)?r.loadings:[{ batchNo:r.batchNo||"", loadedAt:r.loadedAt, unloadedAt:r.unloadedAt }];
+      var rows=loads.map(function(L){
+        var bt=L.batchNo?('<span class="batchref" style="font-size:12.5px">'+esc(L.batchNo)+'</span>'):'<span class="muted">no batch</span>';
+        var lt=L.loadedAt!=null?fmtClock(L.loadedAt):"—", ut=L.unloadedAt!=null?fmtClock(L.unloadedAt):"—";
+        return '<div class="acload">'+bt+'<span class="muted">load '+lt+' \u2192 unload '+ut+'</span></div>';
+      }).join("");
+      acBlock='<div class="acloads">'+rows+'</div>';
+    }
     return '<div class="bcard" data-edit-run="'+esc(r.id)+'" style="cursor:pointer">'
       +'<div class="bhead"><div class="l" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">'+chips.join(" ")+'</div>'
         +'<span class="muted" style="font-size:11px">'+esc(when)+(r.synced?'':' · not synced')+'</span></div>'
       +'<div class="bhint" style="margin-top:9px">'+(facts.length?facts.join(" · "):"—")+'</div>'
+      +acBlock
       +'<div class="bhint" style="margin-top:4px">'+sup+' · tap to edit</div>'
       +'</div>';
   }
@@ -2535,7 +2559,9 @@
         '<div class="field" style="margin-bottom:0"><input id="ac-batch" type="text" inputmode="numeric" autocomplete="off" placeholder="e.g. 2893"></div>'+
         '<div class="sheet-label">Loaded</div><div class="pickgrid">'+pairBtns+'</div></div>'+
       '<div id="ac-coarse" style="'+(specialMode?'display:none':'')+'">'+
-        '<div class="sheet-label">Coarse — no batch</div>'+
+        '<div class="sheet-label">Batch number <span class="muted" style="text-transform:none;letter-spacing:0">— for the autoclave logbook</span></div>'+
+        '<div class="field"><input id="ac-cbatch" type="text" inputmode="numeric" autocomplete="off" placeholder="e.g. 2894"></div>'+
+        '<div class="sheet-label">Date</div>'+
         '<div class="field" style="margin-bottom:0"><input id="ac-date" type="date" value="'+d.date+'"></div></div>'+
       '<div id="ac-crumb" class="ro" style="margin-top:16px"></div>'+
       '<div class="field" style="margin-top:14px"><label>Loading time <span class="muted" style="text-transform:none;letter-spacing:0">— leave blank to start the timer now</span></label><input id="ac-loadtime" type="time"></div>'+
@@ -2573,13 +2599,13 @@
       function loadMs(dateStr){
         var t=(sheet.querySelector("#ac-loadtime")||{}).value||"";
         if(!t) return null;
-        var ms=Date.parse((dateStr||todayISO())+"T"+t); return isNaN(ms)?null:ms;
+        var ms=Date.parse((dateStr||curShift().date||todayISO())+"T"+t); return isNaN(ms)?null:ms;
       }
       if(picks.type==="coarse"){
         var dt=sheet.querySelector("#ac-date").value; if(!dt){ toast("Pick a date","warn"); return; }
-        startAutoclaveCoarse(mid, picks.form, m.capacity, defaultShift().shift, dt, loadMs(dt));
+        startAutoclaveCoarse(mid, picks.form, m.capacity, defaultShift().shift, dt, loadMs(dt), (sheet.querySelector("#ac-cbatch").value||"").trim());
       } else {
-        startAutoclave(mid, sheet.querySelector("#ac-batch").value, picks.form, picks.paired, loadMs(todayISO()));
+        startAutoclave(mid, sheet.querySelector("#ac-batch").value, picks.form, picks.paired, loadMs(curShift().date));
       }
     });
     refreshCrumb();
