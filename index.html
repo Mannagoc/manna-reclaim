@@ -2278,7 +2278,7 @@
       '<button class="btn ghost" data-act="export">Export CSV</button></div>'+
       '<div style="margin-top:8px"><button class="btn ghost block" data-act="resync">Re-send all data</button></div>'+
       '<div class="hint" style="margin-top:10px">"Re-send all" pushes every record again. It is safe — records update by id and won\'t duplicate. '+esc(storeNote)+'</div>'+
-      '<div class="hint" style="margin-top:6px;opacity:.7">Build: app v17 · sync v6 · supabase</div></div>'+
+      '<div class="hint" style="margin-top:6px;opacity:.7">Build: app v18 · sync v6 · supabase</div></div>'+
 
       '<div class="panel" style="margin-top:14px"><div class="sheet-label" style="margin:0 0 10px">Customers & selling price</div>'+
       ((state.settings.customers||[]).length
@@ -2544,7 +2544,9 @@
     var hourField;
     if(m.kind==="autoclave"){
       var loadedAtV=run.loadedAt||run.segStart||null;
-      hourField='<div class="field"><label>Unloading time <span class="muted" style="text-transform:none;letter-spacing:0">— loaded '+(loadedAtV?fmtClock(loadedAtV):"—")+'; blank = now</span></label><input id="f-unload" type="time"></div>';
+      var loadDateV=run.shiftDate||todayISO();
+      hourField='<div class="field"><label>Discharge date <span class="muted" style="text-transform:none;letter-spacing:0">— loaded '+esc(fmtDay(loadDateV))+'</span></label><input id="f-udate" type="date" value="'+todayISO()+'"></div>'+
+        '<div class="field"><label>Unloading time <span class="muted" style="text-transform:none;letter-spacing:0">— loaded '+(loadedAtV?fmtClock(loadedAtV):"—")+'; blank = now</span></label><input id="f-unload" type="time"></div>';
     } else {
       hourField='<div class="field"><label>Hour-meter reading at stop'+(hs!=null?' <span class="muted" style="text-transform:none;letter-spacing:0">— started at '+hs+'</span>':'')+'</label><div class="num-suffix"><input id="f-hour" type="number" inputmode="decimal" placeholder="hour meter now"><span class="sfx">hrs</span></div></div>';
     }
@@ -2607,10 +2609,11 @@
       if(m.kind==="autoclave"){
         var loadedAt=run.loadedAt||run.segStart||Date.now();
         var unl=sheet.querySelector("#f-unload"), ut=unl?(unl.value||""):"";
-        var unloadedAt=Date.now();
-        if(ut){ var ms=Date.parse(todayISO()+"T"+ut); if(!isNaN(ms)) unloadedAt=ms; }
-        if(unloadedAt<loadedAt) unloadedAt+=86400000;
-        f.loadedAt=loadedAt; f.unloadedAt=unloadedAt;
+        var udEl=sheet.querySelector("#f-udate"), ud=udEl?(udEl.value||todayISO()):todayISO();
+        var unloadedAt;
+        if(ut){ var ms=Date.parse(ud+"T"+ut); unloadedAt=isNaN(ms)?Date.now():ms; }
+        else { unloadedAt=(ud===todayISO())?Date.now():(Date.parse(ud+"T12:00")||Date.now()); }
+        f.loadedAt=loadedAt; f.unloadedAt=unloadedAt; f.dischargeDate=ud;
       } else {
         if(hr) f.hourEnd=num(hr.value);
       }
