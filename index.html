@@ -500,13 +500,11 @@
 
   /* ===================== state ===================== */
   var state;
-  function blank(){ return { v:1, settings:{syncUrl:"",supabaseUrl:SUPABASE_URL,supabaseKey:SUPABASE_ANON,device:"",role:"manager",pin:"",customers:[]}, sharedVersion:0, seq:{batch:0}, leftout:{}, batches:[], runs:[], dispatches:[], dispatchLoads:[], vehicles:[], drivers:[], maintenance:[], bearingLogs:[], conversions:[], shift:{date:todayISO(),name:autoShift(),supervisor:""}, machines:{}, qualityTests:[] }; }
+  function blank(){ return { v:1, settings:{syncUrl:"",supabaseUrl:SUPABASE_URL,supabaseKey:SUPABASE_ANON,device:"",role:"manager",pin:"",customers:[]}, sharedVersion:0, seq:{batch:0}, leftout:{}, batches:[], runs:[], dispatches:[], dispatchLoads:[], vehicles:[], drivers:[], maintenance:[], bearingLogs:[], conversions:[], shift:{supervisor:""}, machines:{}, qualityTests:[] }; }
   function todayISO(){ var d=new Date(),m=d.getMonth()+1,day=d.getDate(); return d.getFullYear()+"-"+(m<10?"0":"")+m+"-"+(day<10?"0":"")+day; }
   function autoShift(){ var h=new Date().getHours(); return (h>=6&&h<18)?"Day":"Night"; }
-  function curShift(){ if(!state.shift) state.shift={date:todayISO(),name:autoShift()}; return state.shift; }
-  function setShift(name,date,supervisor,manual){ var c=curShift(); state.shift={ name:name||c.name, date:date||todayISO(), supervisor:(supervisor!=null?supervisor:c.supervisor)||"", manual:!!manual }; save(); render(); pushShift(); }
-  function autoShiftNow(){ return { date:todayISO(), name:autoShift() }; }
-  function refreshAutoShift(){ var c=curShift(); if(c.manual) return; var a=autoShiftNow(); if(c.name!==a.name || c.date!==a.date){ state.shift={ name:a.name, date:a.date, supervisor:c.supervisor||"", manual:false }; } }
+  function curShift(){ if(!state.shift) state.shift={supervisor:""}; return { date:todayISO(), name:autoShift(), supervisor:(state.shift.supervisor||"") }; }
+  function setSupervisor(sup){ if(!state.shift||typeof state.shift!=="object") state.shift={}; state.shift={ supervisor:sup||"" }; save(); render(); pushShift(); }
   function pushShift(){
     if(syncTarget()!=="supabase") return;
     var c=curShift(); if(!c.supervisor) return;
@@ -653,14 +651,7 @@
   function isoDate(d){ function p(n){return(n<10?"0":"")+n;} return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate()); }
   function fmtDay(iso){ if(!iso) return ""; var p=String(iso).split("-"); if(p.length<3) return iso;
     var mo=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]; return parseInt(p[2],10)+" "+mo[parseInt(p[1],10)-1]; }
-  function defaultShift(){
-    if(state.shift && state.shift.manual) return { date:state.shift.date, shift:state.shift.name };   // honour an active back-date
-    var now=new Date(), mins=now.getHours()*60+now.getMinutes(), d=new Date(now), shift;
-    if(mins>=510 && mins<1230){ shift="Day"; }            // 08:30–20:30
-    else if(mins>=1230){ shift="Night"; }                  // 20:30 onward
-    else { shift="Night"; d.setDate(d.getDate()-1); }      // before 08:30 -> previous night
-    return { date:isoDate(d), shift:shift };
-  }
+  function defaultShift(){ return { date:todayISO(), shift:autoShift() }; }
   function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c];}); }
   function num(v){ if(v==="" || v==null) return null; var n=parseFloat(v); return isNaN(n)?null:n; }
   function elapsedOf(run){ var seg=run.segStart||run.start||Date.now(); return (run.accumMs||0)+(run.paused?0:(Date.now()-seg)); }
@@ -671,20 +662,21 @@
   function qchip(q){ return q ? '<span class="qchip q-'+esc(q)+'">'+esc(q)+'</span>' : ''; }
 
   /* ===================== actions ===================== */
-  function startAutoclave(mid, batchNo, formulationName, paired, loadedAt){
+  function startAutoclave(mid, batchNo, formulationName, paired, loadedAt, shiftDate){
     var m=M(mid); batchNo=(batchNo||"").trim();
     if(!batchNo){ toast("Enter a batch number","warn"); return; }
     if(state.batches.some(function(b){ return String(b.no).toLowerCase()===batchNo.toLowerCase(); })){ toast("Batch "+batchNo+" already exists","warn"); return; }
     if(!formulationName){ toast("Pick a formulation","warn"); return; }
+    var sd=shiftDate||curShift().date;
     var b={ id:uid(), no:batchNo, capacity:m.capacity, formulation:formulationName,
-            autoclaveId:m.id, paired:!!paired, startedAt:Date.now(), autoclaveDone:false, qualities:[] };
+            autoclaveId:m.id, paired:!!paired, startedAt:Date.now(), shiftDate:sd, autoclaveDone:false, qualities:[] };
     state.batches.push(b);
-    state.machines[mid].running={ batchId:b.id, quality:"", loadedAt:(loadedAt!=null?loadedAt:Date.now()), segStart:Date.now(), accumMs:0, paused:false };
+    state.machines[mid].running={ batchId:b.id, quality:"", loadedAt:(loadedAt!=null?loadedAt:Date.now()), shiftDate:sd, shift:defaultShift().shift, segStart:Date.now(), accumMs:0, paused:false };
     save(); closeSheet(); render(); toast("Loaded "+batchNo+" on "+m.name,"ok");
     postStatus(mid,"running");
   }
-  function startRefiner(mid, batchId, quality, sourceBatches, elecStart, hourStart){
-    state.machines[mid].running={ batchId:batchId, quality:quality||"", sourceBatches:sourceBatches||[], elecStart:(elecStart==null?"":elecStart), hourStart:(hourStart==null?"":hourStart), segStart:Date.now(), accumMs:0, paused:false };
+  function startRefiner(mid, batchId, quality, sourceBatches, elecStart, hourStart, shiftDate){
+    state.machines[mid].running={ batchId:batchId, quality:quality||"", sourceBatches:sourceBatches||[], elecStart:(elecStart==null?"":elecStart), hourStart:(hourStart==null?"":hourStart), shiftDate:shiftDate||todayISO(), shift:autoShift(), segStart:Date.now(), accumMs:0, paused:false };
     save(); closeSheet(); render();
     var b=batch(batchId); toast(M(mid).name+" started · "+b.no+(quality?" · "+quality:""),"ok");
     postStatus(mid,"running");
@@ -835,7 +827,7 @@
       id:uid(), device:state.settings.device||"", machine:m.name, machineId:m.id, short:m.short, kind:m.kind, line:"special",
       batchId:b.id, batchNo:b.no, capacity:b.capacity, formulation:b.formulation,
       autoclaveId:b.autoclaveId||"", paired:!!b.paired, passes:1,
-      shiftDate:curShift().date, shift:curShift().name, supervisor:curShift().supervisor||"",
+      shiftDate:(run.shiftDate||curShift().date), shift:(run.shift||curShift().name), supervisor:curShift().supervisor||"",
       quality:run.quality||"", start:run.segStart||run.start||end, end:end, runtimeMin:runtimeMin,
       hoursRun:Math.round((runtimeMin/60)*100)/100,
       loadedAt:(fields.loadedAt!=null?fields.loadedAt:null), unloadedAt:(fields.unloadedAt!=null?fields.unloadedAt:null),
@@ -915,9 +907,8 @@
         needsWeigh:false, synced:false, createdAt:end
       });
     }
-    var c=curShift();
     state.conversions.push({ id:uid(), device:state.settings.device||"", batchNo:specialRow.batchNo, qty:qty, stage:stage,
-      ts:end, shiftDate:c.date, shift:c.name, supervisor:c.supervisor||"", synced:false });
+      ts:end, shiftDate:specialRow.shiftDate, shift:specialRow.shift, supervisor:specialRow.supervisor||(curShift().supervisor||""), synced:false });
   }
   function convertAtWeigh(runId, qty){
     var r=weighRow(runId); if(!r) return;
@@ -1179,9 +1170,6 @@
     delete d.settings;                                   // each phone keeps its own keys / pin / device name / role
     delete d.sharedVersion; delete d.lastSharedBy; delete d.lastSharedAt;
     delete d.pendingDeletes; delete d.pendingLoadDeletes; delete d.lastSyncAt;
-    // A manual back-date is local to this device — share a live shift instead so other
-    // tablets are never dragged onto an earlier date.
-    if(d.shift && d.shift.manual){ d.shift={ date:todayISO(), name:autoShift(), supervisor:(state.shift.supervisor||"") }; }
     if(d.dispatchLoads) d.dispatchLoads=d.dispatchLoads.filter(function(l){ return !l.dummy; });
     return d;
   }
@@ -1191,12 +1179,10 @@
     var keepSettings=state.settings;                     // preserve this device's own settings
     var keepVer=state.sharedVersion, keepBy=state.lastSharedBy, keepAt=state.lastSharedAt;
     var keepPendD=state.pendingDeletes, keepPendL=state.pendingLoadDeletes, keepLast=state.lastSyncAt;
-    var keepShift=(state.shift && state.shift.manual)?state.shift:null;   // a local back-date must never be reverted by a pull
     Object.keys(doc).forEach(function(k){ state[k]=doc[k]; });
     state.settings=keepSettings;
     state.sharedVersion=keepVer; state.lastSharedBy=keepBy; state.lastSharedAt=keepAt;
     state.pendingDeletes=keepPendD||[]; state.pendingLoadDeletes=keepPendL||[]; state.lastSyncAt=keepLast||0;
-    if(keepShift) state.shift=keepShift;
     if(!state.machines) state.machines={};
     MACHINES.forEach(function(m){ if(!state.machines[m.id]) state.machines[m.id]={running:null,down:null}; else if(state.machines[m.id].down===undefined) state.machines[m.id].down=null; });
     if(!state.dispatchLoads) state.dispatchLoads=[];
@@ -1373,7 +1359,6 @@
   }
 
   function viewMachines(){
-    refreshAutoShift();
     var groups=[];
     MACHINES.filter(function(m){ return m.enabled!==false; }).forEach(function(m){
       var g=groups[groups.length-1];
@@ -1388,10 +1373,8 @@
     var due=dueMachines();
     var dueBar = due.length ? '<div class="duebar" data-bearings-any="1">🌡 '+due.length+' machine'+(due.length>1?'s':'')+' due for bearing temp logging — '+due.map(function(m){return esc(m.short);}).join(", ")+' · tap to log</div>' : '';
     var c=curShift();
-    var sup = c.supervisor ? esc(c.supervisor) : '<span style="color:var(--amber)">set supervisor</span>';
-    var pinChip = c.manual ? '<span style="color:var(--amber)">\uD83D\uDCCC </span>' : '';
-    var backdateBar = c.manual ? '<div class="duebar" data-shift="1" style="background:var(--amber-soft,#2a2212);border-color:#5a4420;color:var(--amber)">📌 Back-dating to '+esc(fmtDay(c.date))+' · '+esc(c.name)+' — everything you log now is saved under this date. Tap to switch back to today.</div>' : '';
-    return '<div class="view-head"><h1>Machines</h1><div class="meta"><span class="shiftchip'+(c.manual?' pinned':'')+'" data-shift="1">'+pinChip+'<b>'+esc(c.name)+'</b> · '+esc(fmtDay(c.date))+' · 👤 '+sup+' <span style="opacity:.6">▾</span></span></div></div>'+backdateBar+dueBar+body;
+    var sup = c.supervisor ? ('👤 '+esc(c.supervisor)) : '<span style="color:var(--amber)">👤 set supervisor</span>';
+    return '<div class="view-head"><h1>Machines</h1><div class="meta"><span class="shiftchip" data-shift="1">'+sup+' <span style="opacity:.6">▾</span></span></div></div>'+dueBar+body;
   }
   function lastRunFor(mid){
     var last=null;
@@ -1515,33 +1498,18 @@
     toast(M(mid).short+" back online · logged","ok"); postStatus(mid, st.running?(st.running.paused?"paused":"running"):"idle"); }
 
   /* ----- shift context & report ----- */
-  function openShiftPicker(){ var c=curShift(); var pick={name:c.name};
-    var pinned=!!c.manual, today=todayISO();
-    openSheet('<div class="sheet-h"><b>Shift &amp; supervisor</b></div>'+
-      '<div class="sheet-sub">Set who is in charge — it is tagged on everything logged for this shift. Pick a past <b>date</b> to back-log production; it stays on that date until you switch back to today.</div>'+
-      (pinned?'<div class="hint" style="color:var(--amber);margin:-2px 0 10px">\uD83D\uDCCC Logging to '+esc(fmtDay(c.date))+' ('+esc(c.name)+') — not today. New entries are saved under this date.</div>':'')+
-      '<div class="field"><label>Supervisor in charge</label><select id="sh-sup">'+
+  function openShiftPicker(){ var c=curShift();
+    openSheet('<div class="sheet-h"><b>Supervisor in charge</b></div>'+
+      '<div class="sheet-sub">Pick who is on duty — it is tagged on everything logged. The date for each entry is chosen on that entry\u2019s own screen.</div>'+
+      '<div class="field"><label>Supervisor</label><select id="sh-sup">'+
         '<option value="">— select —</option>'+
         SUPERVISORS.map(function(n){ return '<option value="'+esc(n)+'"'+(c.supervisor===n?' selected':'')+'>'+esc(n)+'</option>'; }).join("")+
         ((c.supervisor && SUPERVISORS.indexOf(c.supervisor)<0)?'<option value="'+esc(c.supervisor)+'" selected>'+esc(c.supervisor)+'</option>':'')+
       '</select></div>'+
-      '<div class="sheet-label">Shift</div><div class="pickgrid q4">'+
-        '<button class="pick'+(c.name==="Day"?" sel":"")+'" data-shift-set="Day"><b>Day</b></button>'+
-        '<button class="pick'+(c.name==="Night"?" sel":"")+'" data-shift-set="Night"><b>Night</b></button></div>'+
-      '<div class="field" style="margin-top:14px"><label>Date <span class="muted" style="text-transform:none;letter-spacing:0">— back-date to log an earlier day</span></label><input id="sh-date" type="date" max="'+today+'" value="'+esc(c.date)+'"></div>'+
-      '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button><button class="btn primary" id="sh-done">Save</button></div>'+
-      ((pinned||c.date!==today)?'<button class="btn ghost block" id="sh-today" style="margin-top:10px">↻ Back to today (live)</button>':''));
-    sheet.querySelectorAll("[data-shift-set]").forEach(function(el){ el.addEventListener("click",function(){
-      pick.name=el.getAttribute("data-shift-set");
-      sheet.querySelectorAll("[data-shift-set]").forEach(function(g){ g.classList.remove("sel"); }); el.classList.add("sel"); }); });
+      '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button><button class="btn primary" id="sh-done">Save</button></div>');
     sheet.querySelector("#sh-done").addEventListener("click",function(){
-      var date=(sheet.querySelector("#sh-date").value||c.date), sup=(sheet.querySelector("#sh-sup").value||"").trim();
-      var manual=(date!==todayISO());                                  // a back-date stays put; today's date follows the clock
-      setShift(pick.name,date,sup,manual); closeSheet();
-      toast((manual?"Back-dated to "+fmtDay(date):"Saved")+" · "+pick.name+(sup?" · "+sup:""),"ok"); });
-    var todayBtn=sheet.querySelector("#sh-today");
-    if(todayBtn) todayBtn.addEventListener("click",function(){
-      var a=autoShiftNow(); setShift(a.name, a.date, c.supervisor||"", false); closeSheet(); toast("Back to today \u00b7 "+a.name,"ok"); }); }
+      var sup=(sheet.querySelector("#sh-sup").value||"").trim();
+      setSupervisor(sup); closeSheet(); toast(sup?("Supervisor · "+sup):"Supervisor cleared","ok"); }); }
 
 
   function fmtAgo(ms){ var s=Math.round((Date.now()-ms)/1000); if(s<60) return s+"s ago"; var mn=Math.round(s/60); if(mn<60) return mn+"m ago"; var h=Math.floor(mn/60); var rem=mn%60; return h+"h"+(rem?" "+rem+"m":"")+" ago"; }
@@ -1561,7 +1529,8 @@
       dueNote+rows+
       '<div class="field-inline">'+
         '<div class="field"><label>Supervisor</label><select id="bt-sup"><option value="">—</option>'+supOpts+'</select></div>'+
-        '<div class="field"><label>Reading time <span class="muted" style="text-transform:none;letter-spacing:0">— blank = now</span></label><input id="bt-time" type="time"></div></div>'+
+        '<div class="field"><label>Date</label><input id="bt-date" type="date" value="'+todayISO()+'"></div></div>'+
+      '<div class="field"><label>Reading time <span class="muted" style="text-transform:none;letter-spacing:0">— blank = now</span></label><input id="bt-time" type="time"></div>'+
       '<div class="formwarn" id="bt-warn"></div>'+
       '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button>'+
       '<button class="btn primary" id="bt-go">Log temperatures</button></div>');
@@ -1580,23 +1549,27 @@
       if(!btValidate()){ toast("Enter a valid temperature above zero","warn"); return; }
       var temps=spec.positions.map(function(pos,i){ return { pos:pos, v:num(sheet.querySelector("#bt-"+i).value) }; });
       var sup=sheet.querySelector("#bt-sup").value||"";
+      var dv=(sheet.querySelector("#bt-date")||{}).value||todayISO();
       var tv=(sheet.querySelector("#bt-time")||{}).value||"";
-      var recordedAt=Date.now();
-      if(tv){ var ms=Date.parse(todayISO()+"T"+tv); if(!isNaN(ms)){ if(ms>Date.now()) ms-=86400000; recordedAt=ms; } }   // a future clock time means earlier today/last night
-      commitBearings(mid, temps, sup, recordedAt);
+      var recordedAt;
+      if(tv){ var ms=Date.parse(dv+"T"+tv); recordedAt=isNaN(ms)?Date.now():ms; }
+      else { recordedAt = (dv===todayISO()) ? Date.now() : (Date.parse(dv+"T12:00")||Date.now()); }
+      commitBearings(mid, temps, sup, recordedAt, dv);
     });
   }
-  function commitBearings(mid, temps, supervisor, recordedAt){
+  function commitBearings(mid, temps, supervisor, recordedAt, shiftDate){
     if(!temps.some(function(t){ return t.v!=null; })){ toast("Enter at least one temperature","warn"); return; }
     var m=M(mid), spec=bearingSpec(m), c=curShift();
     var rec=(recordedAt!=null?recordedAt:Date.now());
     var ts=new Date(rec).toISOString();          // ts drives the schedule, so it reflects the ACTUAL reading time
     var sup=(supervisor!=null&&supervisor!=="")?supervisor:(c.supervisor||"");
+    var sd=shiftDate||todayISO();
+    var sh=(new Date(rec).getHours()>=6 && new Date(rec).getHours()<18)?"Day":"Night";
     state.bearingLogs=state.bearingLogs||[];
     temps.forEach(function(t){ if(t.v==null) return;
       state.bearingLogs.push({ id:uid(), device:state.settings.device||"", machineId:mid, machine:m.name,
         position:t.pos, bearingType:spec.type, tempC:t.v, ts:ts, recordedAt:rec, loggedAt:Date.now(),
-        shiftDate:c.date, shift:c.name, supervisor:sup, synced:false }); });
+        shiftDate:sd, shift:sh, supervisor:sup, synced:false }); });
     save(); closeSheet(); render(); toast(m.short+" "+spec.type+" temps logged","ok");
   }
 
@@ -2305,7 +2278,7 @@
       '<button class="btn ghost" data-act="export">Export CSV</button></div>'+
       '<div style="margin-top:8px"><button class="btn ghost block" data-act="resync">Re-send all data</button></div>'+
       '<div class="hint" style="margin-top:10px">"Re-send all" pushes every record again. It is safe — records update by id and won\'t duplicate. '+esc(storeNote)+'</div>'+
-      '<div class="hint" style="margin-top:6px;opacity:.7">Build: app v15 · sync v6 · supabase</div></div>'+
+      '<div class="hint" style="margin-top:6px;opacity:.7">Build: app v17 · sync v6 · supabase</div></div>'+
 
       '<div class="panel" style="margin-top:14px"><div class="sheet-label" style="margin:0 0 10px">Customers & selling price</div>'+
       ((state.settings.customers||[]).length
@@ -2425,7 +2398,9 @@
       '<div id="ac-special" style="'+(specialMode?'':'display:none')+'">'+
         '<div class="sheet-label">Batch number</div>'+
         '<div class="field" style="margin-bottom:0"><input id="ac-batch" type="text" inputmode="numeric" autocomplete="off" placeholder="e.g. 2893"></div>'+
-        '<div class="sheet-label">Loaded</div><div class="pickgrid">'+pairBtns+'</div></div>'+
+        '<div class="sheet-label">Loaded</div><div class="pickgrid">'+pairBtns+'</div>'+
+        '<div class="sheet-label">Shift date <span class="muted" style="text-transform:none;letter-spacing:0">— the night shift keeps its start date</span></div>'+
+        '<div class="field" style="margin-bottom:0"><input id="ac-sdate" type="date" value="'+d.date+'"></div></div>'+
       '<div id="ac-coarse" style="'+(specialMode?'display:none':'')+'">'+
         '<div class="sheet-label">Coarse batch number</div>'+
         '<div class="field" style="margin-bottom:0"><input id="ac-cbatch" type="text" inputmode="numeric" autocomplete="off" placeholder="e.g. C-2893"></div>'+
@@ -2461,7 +2436,8 @@
         var dt=sheet.querySelector("#ac-date").value; if(!dt){ toast("Pick a date","warn"); return; }
         startAutoclaveCoarse(mid, picks.form, m.capacity, defaultShift().shift, dt, loadMs(dt), sheet.querySelector("#ac-cbatch").value);
       } else {
-        startAutoclave(mid, sheet.querySelector("#ac-batch").value, picks.form, picks.paired, loadMs(todayISO()));
+        var sdt=sheet.querySelector("#ac-sdate").value; if(!sdt){ toast("Pick a shift date","warn"); return; }
+        startAutoclave(mid, sheet.querySelector("#ac-batch").value, picks.form, picks.paired, loadMs(sdt), sdt);
       }
     });
   }
@@ -2491,6 +2467,7 @@
       '<div class="sheet-sub">'+(forced?(esc(forced)+' grade · '):(m.sub?esc(m.sub.charAt(0).toUpperCase()+m.sub.slice(1))+' · ':''))+'Pick batch'+(wantQuality&&!forced?' and quality.':'.')+'</div>'+
       '<div class="sheet-label">Batch</div><div class="pickgrid">'+batchBtns+'</div>'+qBtns+
       '<div id="mixbox" style="display:none"><div class="sheet-label" style="margin-top:14px">Mixed from <span class="muted" style="text-transform:none;letter-spacing:0">— add tailings of other batches</span></div><div class="pickgrid" id="mixgrid"></div></div>'+
+      '<div class="field" style="margin-top:14px"><label>Date</label><input id="rf-date" type="date" value="'+todayISO()+'"></div>'+
       '<div class="field"><label>Initial electricity reading'+(preElec!==""?' <span class="muted" style="text-transform:none;letter-spacing:0">— last end '+preElec+'</span>':' <span class="muted" style="text-transform:none;letter-spacing:0">— meter units now</span>')+'</label><div class="num-suffix"><input id="rf-elec" type="number" inputmode="decimal" placeholder="meter reading" value="'+preElec+'"><span class="sfx">units</span></div></div>'+
       '<div class="field"><label>Hour-meter reading at start'+(preHour!==""?' <span class="muted" style="text-transform:none;letter-spacing:0">— last end '+preHour+'</span>':'')+'</label><div class="num-suffix"><input id="rf-hour" type="number" inputmode="decimal" placeholder="hour meter now" value="'+preHour+'"><span class="sfx">hrs</span></div></div>'+
       '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button>'+
@@ -2534,7 +2511,8 @@
       var e0=sheet.querySelector("#rf-elec"), h0=sheet.querySelector("#rf-hour");
       if(e0 && (e0.value||"").trim()!=="" && num(e0.value)<=0){ toast("Initial electricity reading must be greater than zero","warn"); return; }
       if(h0 && (h0.value||"").trim()!=="" && num(h0.value)<=0){ toast("Initial hour-meter reading must be greater than zero","warn"); return; }
-      startRefiner(mid,picks.batchId,picks.quality,src,num(sheet.querySelector("#rf-elec").value),num(sheet.querySelector("#rf-hour").value)); });
+      var rdt=(sheet.querySelector("#rf-date")||{}).value||""; if(!rdt){ toast("Pick a date","warn"); return; }
+      startRefiner(mid,picks.batchId,picks.quality,src,num(sheet.querySelector("#rf-elec").value),num(sheet.querySelector("#rf-hour").value),rdt); });
     function checkGo(){ go.disabled=!(picks.batchId && (!wantQuality || picks.quality)); }
     function sel(group,one){ group.forEach(function(g){ g.classList.remove("sel"); }); one.classList.add("sel"); }
     if(forced && (forced==="Fine"||forced==="Medium")){ sheet.querySelector("#mixbox").style.display="block"; renderMix(); }
@@ -2869,7 +2847,7 @@
   setInterval(pushLiveState, 60000);
   setTimeout(pushLiveState, 5000);
   // Auto shift-by-clock + refresh bearing-due warnings on the Machines screen.
-  setInterval(function(){ refreshAutoShift(); if(active==="machines") render(); }, 60000);
+  setInterval(function(){ if(active==="machines") render(); }, 60000);
   if(typeof window!=="undefined"){
     window.addEventListener("online", function(){ scheduleAutoSync(1500); pullShared(); pullQuality(); flushQcUploads(); });
     window.addEventListener("focus", function(){ scheduleAutoSync(1500); pullShared(); pullQuality(); flushQcUploads(); });
