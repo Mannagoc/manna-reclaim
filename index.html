@@ -2266,7 +2266,7 @@
       '<button class="btn ghost" data-act="export">Export CSV</button></div>'+
       '<div style="margin-top:8px"><button class="btn ghost block" data-act="resync">Re-send all data</button></div>'+
       '<div class="hint" style="margin-top:10px">"Re-send all" pushes every record again. It is safe — records update by id and won\'t duplicate. '+esc(storeNote)+'</div>'+
-      '<div class="hint" style="margin-top:6px;opacity:.7">Build: app v10 · sync v6 · supabase</div></div>'+
+      '<div class="hint" style="margin-top:6px;opacity:.7">Build: app v11 · sync v6 · supabase</div></div>'+
 
       '<div class="panel" style="margin-top:14px"><div class="sheet-label" style="margin:0 0 10px">Customers & selling price</div>'+
       ((state.settings.customers||[]).length
@@ -2486,7 +2486,7 @@
     } else {
       if(sw) workerVal=2;
       var es0=(run.elecStart===""||run.elecStart==null)?null:run.elecStart;
-      energyField='<div class="field"><label>Final electricity reading'+(es0!=null?' <span class="muted" style="text-transform:none;letter-spacing:0">— started at '+es0+'</span>':'')+'</label><div class="num-suffix"><input id="f-elec" type="number" inputmode="decimal" placeholder="meter reading now"><span class="sfx">units</span></div></div>';
+      energyField='<div class="field"><label>Final electricity reading'+(es0!=null?' <span class="muted" style="text-transform:none;letter-spacing:0">— started at '+es0+'</span>':'')+'</label><div class="num-suffix"><input id="f-elec" type="number" inputmode="decimal" placeholder="meter reading now"><span class="sfx">units</span></div>'+(mid==="GRD_O"?'<div class="hint" style="margin-top:5px">Soorya TOD meter shows one phase — energy is recorded as the difference × 3.</div>':'')+'</div>';
     }
     fields='<div class="field-inline">'+energyField+
       '<div class="field"><label>Workers</label><input id="f-work" type="number" inputmode="numeric" placeholder="0" value="'+workerVal+'"></div></div>';
@@ -2519,7 +2519,13 @@
       if(elec){
         var fin=num(elec.value), es=(run.elecStart===""||run.elecStart==null)?null:run.elecStart;
         f.elecEnd=fin; f.elecStart=es;
-        if(fin!=null && es!=null) f.kWh=Math.max(0, Math.round((fin-es)*100)/100);
+        if(fin!=null && es!=null){
+          var diff=fin-es;
+          // Soorya grinder is read from a TOD meter that shows a single phase only,
+          // so the true 3-phase energy is the meter difference × 3. Raw readings stay as-is.
+          if(mid==="GRD_O") diff=diff*3;
+          f.kWh=Math.max(0, Math.round(diff*100)/100);
+        }
       }
       f.hourStart=hs;
       if(m.kind==="autoclave"){
