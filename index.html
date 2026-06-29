@@ -89,14 +89,28 @@
   .msec b{ font-size:10.5px; letter-spacing:.18em; text-transform:uppercase; color:var(--ink-faint); font-weight:700; white-space:nowrap; }
   .msec .ln{ flex:1; height:1px; background:var(--line); }
   .msec .ct{ font-family:var(--mono); font-size:10px; letter-spacing:.04em; color:var(--amber); white-space:nowrap; }
-  .crumbbar{ display:grid; grid-template-columns:1fr 1fr; gap:11px; margin:0 0 16px; }
-  .crumbcell{ background:linear-gradient(180deg,#202a18,#171c11); border:1px solid var(--line); border-radius:var(--r);
-    padding:11px 13px; display:flex; flex-direction:column; gap:2px; position:relative; overflow:hidden; }
-  .crumbcell::before{ content:""; position:absolute; left:0; top:0; bottom:0; width:3px; background:var(--steel); opacity:.8; }
-  .crumbcell .cl{ font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-faint); font-weight:700; }
-  .crumbcell .cv{ font-size:22px; font-weight:600; color:var(--ink); line-height:1.1; }
-  .crumbcell .cv small{ font-size:12px; color:var(--ink-dim); font-weight:400; }
-  .crumbcell .cu{ font-size:10px; color:var(--ink-faint); letter-spacing:.04em; }
+  /* bearing schedule tab */
+  .bgrade{ display:flex; flex-wrap:wrap; gap:6px; margin-top:9px; }
+  .gradetag{ display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:700; padding:3px 8px; border-radius:6px; background:#161310; border:1px solid var(--line2); }
+  .gradetag .gd{ width:8px; height:8px; border-radius:50%; background:var(--steel); }
+  .gradetag.pass .gd{ background:var(--ok); } .gradetag.hold .gd{ background:var(--err); }
+  .brow{ display:flex; align-items:center; justify-content:space-between; gap:10px; background:#161310;
+    border:1px solid var(--line); border-radius:9px; padding:8px 11px; font-size:12.5px; margin-top:6px; }
+  .brow .bt{ font-family:var(--mono); }
+  .bstat{ font-size:11px; font-weight:700; letter-spacing:.04em; padding:3px 9px; border-radius:6px; }
+  .bstat.ok{ background:#1f2c17; color:var(--ok); border:1px solid #2f4a26; }
+  .bstat.due{ background:#2a2310; color:var(--amber); border:1px solid #7a5a1f; }
+  .bstat.idle{ background:#1a1f12; color:var(--ink-faint); border:1px solid var(--line); }
+  .bstat.miss{ background:#2c1816; color:var(--err); border:1px solid #5a2c1d; }
+  /* per-grade QC verdict row */
+  .qgrow{ display:flex; align-items:center; gap:7px; margin-bottom:8px; }
+  .gbtn{ flex:1; background:#161310; border:1.5px solid var(--line2); border-radius:9px; color:var(--ink-dim);
+    font-size:12.5px; font-weight:700; padding:9px 4px; cursor:pointer; text-align:center; }
+  .gbtn:active{ transform:scale(.97); }
+  .gbtn.sel{ color:var(--ink); }
+  .gbtn.pass.sel{ border-color:var(--ok); background:#1b2a16; color:var(--ok); }
+  .gbtn.hold.sel{ border-color:var(--err); background:#2c1816; color:var(--err); }
+  .gbtn.none.sel{ border-color:var(--line2); background:#20281a; color:var(--ink-dim); }
   .toggle-row{ display:flex; align-items:center; justify-content:space-between; gap:14px; cursor:pointer; padding:2px 0; }
   .toggle-row small{ display:block; color:var(--ink-dim); font-size:11px; margin-top:3px; line-height:1.35; }
   .toggle{ flex:none; width:46px; height:27px; border-radius:14px; background:#2a3320; border:1px solid var(--line); position:relative; transition:background .15s; }
@@ -178,6 +192,24 @@
   .weighrow .tnum{ font-family:var(--mono); font-size:15px; }
   .wdel{ width:26px; height:26px; border-radius:7px; background:#2a130f; border:1px solid #5a2620;
     color:var(--err); font-size:13px; display:grid; place-items:center; }
+
+  .cllist{ display:flex; flex-direction:column; gap:9px; margin:4px 0 4px; max-height:46vh; overflow-y:auto; padding-right:2px; }
+  .clrow{ background:#161310; border:1px solid var(--line); border-radius:var(--r-sm); padding:10px 12px; }
+  .clrow.imp{ border-color:var(--ember); background:#1c1611; }
+  .clitem b{ font-size:13.5px; font-weight:650; display:block; }
+  .clitem small{ display:block; color:var(--muted); font-size:11.5px; margin-top:2px; line-height:1.35; }
+  .clmark{ display:flex; gap:8px; margin-top:9px; }
+  .clok,.clno{ flex:1; padding:8px 0; border-radius:8px; font-weight:650; font-size:12.5px;
+    background:#100d0b; border:1.5px solid var(--line2); color:var(--muted); }
+  .clok.sel{ background:rgba(108,184,63,.16); border-color:var(--ok); color:var(--ok); }
+  .clno.sel{ background:rgba(220,70,60,.16); border-color:var(--err); color:var(--err); }
+  .clrem{ width:100%; margin-top:8px; background:#100d0b; border:1px solid var(--line); border-radius:8px;
+    padding:7px 10px; color:var(--ink); font-size:12.5px; }
+  .clphoto{ display:flex; align-items:center; gap:8px; margin-top:8px; flex-wrap:wrap; }
+  .clthumbwrap{ display:flex; align-items:center; gap:6px; }
+  .clthumb{ height:42px; width:42px; object-fit:cover; border-radius:7px; border:1px solid var(--line2); display:block; }
+  .clphoto-btn{ display:inline-flex; align-items:center; gap:5px; cursor:pointer; font-size:11.5px; font-weight:650;
+    color:var(--err); background:rgba(220,70,60,.1); border:1px solid #5a2620; border-radius:8px; padding:6px 10px; }
 
   .mbody{ margin-top:12px; }
   .runline{ display:flex; align-items:center; justify-content:space-between; gap:10px; }
@@ -353,36 +385,6 @@
 
   .muted{ color:var(--ink-faint); }
   .hr{ height:1px; background:var(--line); margin:16px 0; border:none; }
-
-  /* ---- history audit view ---- */
-  .hvctl{ display:flex; align-items:flex-end; gap:10px; flex-wrap:wrap; margin:2px 0 16px; }
-  .hvctl .hvfield{ display:flex; flex-direction:column; gap:5px; }
-  .hvctl label{ font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint); font-weight:700; }
-  .hvctl input[type=date]{ background:var(--panel2); border:1px solid var(--line2); color:var(--ink); border-radius:var(--r-sm); padding:9px 11px; font-family:var(--mono); font-size:14px; color-scheme:dark; }
-  .hvseg{ display:inline-flex; background:var(--panel2); border:1px solid var(--line2); border-radius:var(--r-sm); padding:3px; gap:3px; }
-  .hvseg button{ border:none; background:none; color:var(--ink-dim); font-weight:700; font-size:13.5px; padding:8px 16px; border-radius:7px; }
-  .hvseg button.on{ background:var(--amber); color:#1c1306; }
-  .hsec{ display:flex; align-items:center; gap:12px; margin:18px 2px 10px; }
-  .hsec b{ font-size:11.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-dim); font-weight:800; }
-  .hsec .ln{ flex:1; height:1px; background:var(--line); }
-  .hgrid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px; }
-  .htile{ position:relative; text-align:left; background:linear-gradient(180deg,var(--panel2),var(--panel)); border:1px solid var(--line); border-radius:var(--r); padding:13px 14px; color:var(--ink); min-height:96px; display:flex; flex-direction:column; }
-  .htile:active{ transform:translateY(1px); }
-  .htile.idle{ opacity:.6; }
-  .htile.hot{ border-color:#5a431f; }
-  .htile .hn{ font-weight:750; font-size:15px; letter-spacing:-.01em; }
-  .htile .hk{ font-size:10px; letter-spacing:.06em; text-transform:uppercase; color:var(--ink-faint); margin-top:2px; }
-  .htile .hc{ margin-top:auto; padding-top:12px; font-size:11px; color:var(--ink-faint); }
-  .htile .hc b{ font-size:26px; font-weight:600; color:var(--ink); line-height:.9; margin-right:5px; }
-  .htile .htag{ position:absolute; top:11px; right:11px; font-size:10.5px; font-weight:750; color:var(--amber); background:rgba(232,161,58,.13); border:1px solid #5a431f; border-radius:20px; padding:2px 8px; }
-  .hvback{ display:inline-flex; align-items:center; gap:5px; background:none; border:none; color:var(--ink-dim); font-weight:650; font-size:14px; padding:4px 2px; margin-bottom:6px; }
-  .hvdethead{ display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin:2px 2px 14px; }
-  .hvdethead h2{ margin:0; font-size:21px; font-weight:800; }
-  .hvdethead .muted{ font-family:var(--mono); font-size:13px; }
-  .hvmiss{ color:var(--amber); background:rgba(232,161,58,.13); border:1px solid #5a431f; border-radius:6px; font-size:11px; font-weight:700; padding:3px 8px; }
-  .acloads{ margin-top:9px; border-top:1px solid var(--line); }
-  .acload{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:7px 0 0; font-size:12.5px; }
-  .acload .muted{ font-family:var(--mono); font-size:11.5px; }
   @media (prefers-reduced-motion: reduce){ *{ animation:none !important; transition:none !important; } }
 </style>
 </head>
@@ -421,9 +423,9 @@
   /* ===================== domain ===================== */
   var MACHINES=[
     {id:"CRK",  name:"Cracker",              short:"CRK",     kind:"grind", accent:"var(--steel)", tyre:true, outWeight:false, crumb:false, defTyre:"truck", sub:"shiftwise · tyre prep",   group:"Grinding line"},
-    {id:"GRD_K",name:"Grinder 1", short:"Grind 1", kind:"grind", accent:"var(--steel)", tyre:true, outWeight:true,  crumb:true,  defTyre:"truck", sub:"shiftwise · 30# default", group:"Grinding line"},
-    {id:"GRD_S",name:"Grinder 2", short:"Grind 2", kind:"grind", accent:"var(--steel)", tyre:true, outWeight:true,  crumb:true,  defTyre:"bike",  sub:"shiftwise · 20# default", group:"Grinding line"},
-    {id:"GRD_O",name:"Soorya Grinder",       short:"Soorya",  kind:"grind", accent:"var(--steel)", tyre:true, outWeight:true,  crumb:true,  defTyre:"truck", sub:"shiftwise",             group:"Grinding line"},
+    {id:"GRD_K",name:"Grinder 1", short:"Grind 1", kind:"grind", accent:"var(--steel)", tyre:true, outWeight:true,  crumb:false, defTyre:"truck", sub:"shiftwise · 30# default", group:"Grinding line"},
+    {id:"GRD_S",name:"Grinder 2", short:"Grind 2", kind:"grind", accent:"var(--steel)", tyre:true, outWeight:true,  crumb:false, defTyre:"bike",  sub:"shiftwise · 20# default", group:"Grinding line"},
+    {id:"GRD_O",name:"Soorya Grinder",       short:"Soorya",  kind:"grind", accent:"var(--steel)", tyre:true, outWeight:true,  crumb:false, defTyre:"truck", sub:"shiftwise",             group:"Grinding line"},
     {id:"AC_A",name:"Autoclave A",  short:"AC-A", kind:"autoclave", capacity:2500, accent:"var(--ember)", needsQuality:false, weigh:false, group:"Autoclaves"},
     {id:"AC_M",name:"Autoclave M",  short:"AC-M", kind:"autoclave", capacity:2200, accent:"var(--ember)", needsQuality:false, weigh:false, group:"Autoclaves"},
     {id:"AC_N",name:"Autoclave N",  short:"AC-N", kind:"autoclave", capacity:2200, accent:"var(--ember)", needsQuality:false, weigh:false, group:"Autoclaves", enabled:false},
@@ -483,24 +485,20 @@
     return out;
   }
   function shiftRowFor(machId, shiftDate, shift){ for(var i=0;i<state.runs.length;i++){ var r=state.runs[i]; if(r.shiftwise&&r.machineId===machId&&r.shiftDate===shiftDate&&r.shift===shift) return r; } return null; }
-  function crumbAvail(store){ return Math.round(((state.crumb&&state.crumb[store])||0)*100)/100; }
-  function addCrumb(store, kg){ if(!state.crumb) state.crumb={truck:0,bike:0}; state.crumb[store]=Math.round((((state.crumb[store])||0)+(parseFloat(kg)||0))*100)/100; }
-  function takeCrumb(store, kg){ if(!state.crumb) state.crumb={truck:0,bike:0}; state.crumb[store]=Math.max(0, Math.round(((((state.crumb[store])||0)-(parseFloat(kg)||0)))*100)/100); }
+  /* Post-shift crumb is RECORDED ONLY — no stock balance, no deduction, no arithmetic. */
 
   var FIREWOOD_KG=550;            // constant per autoclave load
   function autoclaveWorkers(paired){ return paired?1:2; } // 2 people share 2 autoclaves -> 1 each; alone -> 2
 
   /* ===================== state ===================== */
   var state;
-  function blank(){ return { v:1, settings:{syncUrl:"",supabaseUrl:SUPABASE_URL,supabaseKey:SUPABASE_ANON,device:"",role:"manager",pin:"",customers:[]}, sharedVersion:0, seq:{batch:0}, crumb:{truck:0,bike:0}, leftout:{}, batches:[], runs:[], dispatches:[], dispatchLoads:[], vehicles:[], drivers:[], maintenance:[], bearingLogs:[], conversions:[], shift:{date:"",name:autoShift(),supervisor:""}, machines:{}, qualityTests:[] }; }
+  function blank(){ return { v:1, settings:{syncUrl:"",supabaseUrl:SUPABASE_URL,supabaseKey:SUPABASE_ANON,device:"",role:"manager",pin:"",customers:[]}, sharedVersion:0, seq:{batch:0}, leftout:{}, batches:[], runs:[], dispatches:[], dispatchLoads:[], vehicles:[], drivers:[], maintenance:[], bearingLogs:[], conversions:[], shift:{date:todayISO(),name:autoShift(),supervisor:""}, machines:{}, qualityTests:[] }; }
   function todayISO(){ var d=new Date(),m=d.getMonth()+1,day=d.getDate(); return d.getFullYear()+"-"+(m<10?"0":"")+m+"-"+(day<10?"0":"")+day; }
   function autoShift(){ var h=new Date().getHours(); return (h>=6&&h<18)?"Day":"Night"; }
-  function curShift(){ if(!state.shift) state.shift={date:"",name:autoShift(),supervisor:""}; return state.shift; }
-  function setShift(name,date,supervisor){ var c=curShift(); state.shift={ name:name||c.name, date:(date!=null?date:c.date)||"", supervisor:(supervisor!=null?supervisor:c.supervisor)||"" }; save(); render(); pushShift(); }
-  function autoShiftNow(){ return { date:"", name:autoShift() }; }
-  // shift name may follow the clock, but the production DATE is always set by the supervisor (never auto)
-  function refreshAutoShift(){ var c=curShift(); if(!c.name) state.shift.name=autoShift(); }
-  function shiftReady(){ var c=curShift(); if(!c.date){ toast("Set the production date for this shift first","warn"); openShiftPicker(); return false; } return true; }
+  function curShift(){ if(!state.shift) state.shift={date:todayISO(),name:autoShift()}; return state.shift; }
+  function setShift(name,date,supervisor){ var c=curShift(); state.shift={ name:name||c.name, date:date||todayISO(), supervisor:(supervisor!=null?supervisor:c.supervisor)||"" }; save(); render(); pushShift(); }
+  function autoShiftNow(){ return { date:todayISO(), name:autoShift() }; }
+  function refreshAutoShift(){ var a=autoShiftNow(), c=curShift(); if(c.name!==a.name || c.date!==a.date){ state.shift={ name:a.name, date:a.date, supervisor:c.supervisor||"" }; } }
   function pushShift(){
     if(syncTarget()!=="supabase") return;
     var c=curShift(); if(!c.supervisor) return;
@@ -526,6 +524,33 @@
     return (Date.now()-ref) >= spec.intervalH*3600000;
   }
   function dueMachines(){ return MACHINES.filter(function(m){ return bearingDue(m); }); }
+  /* Schedule status for the Bearing tab. Running machines are graded; idle/down are noted. */
+  function bearingStatus(m){
+    var spec=bearingSpec(m); if(!spec) return null;
+    var st=state.machines[m.id]||{}, run=st.running, last=lastBearingLog(m.id);
+    var intervalMs=spec.intervalH*3600000;
+    if(st.down) return { spec:spec, state:"idle", note:"machine down", last:last, missed:0, overdueMin:0 };
+    if(!run) return { spec:spec, state:"idle", note:"not running", last:last, missed:0, overdueMin:0 };
+    if(run.paused) return { spec:spec, state:"idle", note:"paused", last:last, missed:0, overdueMin:0 };
+    var ref=(last!=null)?last:runStartMs(m.id);
+    if(ref==null) return { spec:spec, state:"ok", note:"running", last:last, missed:0, overdueMin:0 };
+    var gap=Date.now()-ref;
+    var overdue=gap-intervalMs;
+    var missed = overdue>0 ? Math.floor(gap/intervalMs) : 0;     // how many interval boundaries have passed unlogged
+    if(overdue>=0) return { spec:spec, state:(missed>=2?"miss":"due"), note:(last!=null?"last "+fmtAgo(last):"never logged"), last:last, missed:missed, overdueMin:Math.round(overdue/60000) };
+    return { spec:spec, state:"ok", note:"next in "+fmtDur(Math.round(-overdue/60000)), last:last, missed:0, overdueMin:0 };
+  }
+  /* Group individual position rows into one logging event (same machine + timestamp). */
+  function bearingEvents(mid, limit){
+    var byKey={};
+    (state.bearingLogs||[]).forEach(function(x){ if(x.machineId!==mid) return;
+      var k=String(x.ts);
+      if(!byKey[k]) byKey[k]={ ts:x.ts, recordedAt:(x.recordedAt!=null?x.recordedAt:+new Date(x.ts)), supervisor:x.supervisor||"", type:x.bearingType, temps:{} };
+      byKey[k].temps[x.position]=x.tempC;
+    });
+    var arr=Object.keys(byKey).map(function(k){ return byKey[k]; }).sort(function(a,b){ return (b.recordedAt||0)-(a.recordedAt||0); });
+    return limit?arr.slice(0,limit):arr;
+  }
   function load(){
     var raw=store.read(), s;
     if(raw){ try{ s=JSON.parse(raw); }catch(e){ s=blank(); } } else s=blank();
@@ -558,10 +583,8 @@
       s.dispatchLoads.push(mkLoad("EASTERN",true,"KL-17-CD-5678","Rajan",[ mk("Special","",null,1500,"EASTERN"), mk("SuperFine","",null,800,"EASTERN") ],30));
     }
     if(!s.leftout) s.leftout={};
-    if(!s.shift) s.shift={date:"",name:autoShift(),supervisor:""};
+    if(!s.shift) s.shift={date:todayISO(),name:autoShift(),supervisor:""};
     if(s.shift.supervisor==null) s.shift.supervisor="";
-    s.shift.date="";   // never carry a date across loads — supervisor must pick the production date (calendar) each session
-    if(!s.crumb) s.crumb={truck:0,bike:0};
     if(s.settings.autoSync==null) s.settings.autoSync=true;
     if(!s.settings.supabaseUrl) s.settings.supabaseUrl=SUPABASE_URL;
     if(!s.settings.supabaseKey) s.settings.supabaseKey=SUPABASE_ANON;
@@ -620,18 +643,14 @@
   function fmtDate(ms){ var d=new Date(ms); var mo=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
     return mo[d.getMonth()]+" "+d.getDate()+" "+fmtClock(ms); }
   function isoDate(d){ function p(n){return(n<10?"0":"")+n;} return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate()); }
-  function localDTValue(ms){ var d=new Date(ms); function p(n){return(n<10?"0":"")+n;} return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+"T"+p(d.getHours())+":"+p(d.getMinutes()); }
-  function parseLocalDT(v){ if(!v) return null; var t=Date.parse(v); return isNaN(t)?null:t; }
   function fmtDay(iso){ if(!iso) return ""; var p=String(iso).split("-"); if(p.length<3) return iso;
     var mo=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]; return parseInt(p[2],10)+" "+mo[parseInt(p[1],10)-1]; }
   function defaultShift(){
-    var now=new Date(), mins=now.getHours()*60+now.getMinutes(), shift;
+    var now=new Date(), mins=now.getHours()*60+now.getMinutes(), d=new Date(now), shift;
     if(mins>=510 && mins<1230){ shift="Day"; }            // 08:30–20:30
     else if(mins>=1230){ shift="Night"; }                  // 20:30 onward
-    else { shift="Night"; }                                // before 08:30 -> night
-    var c=state.shift||{};
-    // date always comes from the supervisor-set shift (manual); shift name may follow the clock
-    return { date:(c.date||""), shift:(c.name||shift) };
+    else { shift="Night"; d.setDate(d.getDate()-1); }      // before 08:30 -> previous night
+    return { date:isoDate(d), shift:shift };
   }
   function esc(s){ return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c];}); }
   function num(v){ if(v==="" || v==null) return null; var n=parseFloat(v); return isNaN(n)?null:n; }
@@ -648,8 +667,6 @@
     if(!batchNo){ toast("Enter a batch number","warn"); return; }
     if(state.batches.some(function(b){ return String(b.no).toLowerCase()===batchNo.toLowerCase(); })){ toast("Batch "+batchNo+" already exists","warn"); return; }
     if(!formulationName){ toast("Pick a formulation","warn"); return; }
-    if(crumbAvail("truck") < m.capacity){ toast("Not enough truck crumb — "+crumbAvail("truck")+" / "+m.capacity+" kg","err"); return; }
-    takeCrumb("truck", m.capacity);
     var b={ id:uid(), no:batchNo, capacity:m.capacity, formulation:formulationName,
             autoclaveId:m.id, paired:!!paired, startedAt:Date.now(), autoclaveDone:false, qualities:[] };
     state.batches.push(b);
@@ -658,7 +675,7 @@
     postStatus(mid,"running");
   }
   function startRefiner(mid, batchId, quality, sourceBatches, elecStart, hourStart){
-    state.machines[mid].running={ batchId:batchId, quality:quality||"", sourceBatches:sourceBatches||[], elecStart:(elecStart==null?"":elecStart), hourStart:(hourStart==null?"":hourStart), shiftDate:curShift().date, shift:curShift().name, segStart:Date.now(), accumMs:0, paused:false };
+    state.machines[mid].running={ batchId:batchId, quality:quality||"", sourceBatches:sourceBatches||[], elecStart:(elecStart==null?"":elecStart), hourStart:(hourStart==null?"":hourStart), segStart:Date.now(), accumMs:0, paused:false };
     save(); closeSheet(); render();
     var b=batch(batchId); toast(M(mid).name+" started · "+b.no+(quality?" · "+quality:""),"ok");
     postStatus(mid,"running");
@@ -669,12 +686,10 @@
     save(); closeSheet(); render(); toast(m.short+" started · "+shift+(tyreType?" · "+TYRES[tyreType].label:""),"ok");
     postStatus(mid,"running");
   }
-  function startAutoclaveCoarse(mid, formName, cap, shift, shiftDate, loadedAt, batchNo){
+  function startAutoclaveCoarse(mid, formName, cap, shift, shiftDate, loadedAt){
     var m=M(mid);
-    if(crumbAvail("bike") < cap){ toast("Not enough bike crumb — "+crumbAvail("bike")+" / "+cap+" kg","err"); return; }
-    takeCrumb("bike", cap);
-    state.machines[mid].running={ shiftwise:true, line:"coarse", autoclaveId:m.id, formulation:formName, capacity:cap, shift:shift, shiftDate:shiftDate, loadBatchNo:(batchNo||""), loadedAt:(loadedAt!=null?loadedAt:Date.now()), segStart:Date.now(), accumMs:0, paused:false };
-    save(); closeSheet(); render(); toast(m.name+" loaded · coarse"+(batchNo?" · batch "+batchNo:""),"ok");
+    state.machines[mid].running={ shiftwise:true, line:"coarse", autoclaveId:m.id, formulation:formName, capacity:cap, shift:shift, shiftDate:shiftDate, loadedAt:(loadedAt!=null?loadedAt:Date.now()), segStart:Date.now(), accumMs:0, paused:false };
+    save(); closeSheet(); render(); toast(m.name+" loaded · coarse","ok");
     postStatus(mid,"running");
   }
   function pauseMachine(mid){
@@ -716,12 +731,6 @@
       if(run) postStatus(mid, run.paused?"paused":"running");
     });
   }
-  // one autoclave loading record (batch + load/unload times) for the autoclave logbook audit
-  function acLoadEntry(run, fields, end){
-    return { batchNo:(run.loadBatchNo||""),
-      loadedAt:(run.loadedAt!=null?run.loadedAt:(fields.loadedAt!=null?fields.loadedAt:null)),
-      unloadedAt:(fields.unloadedAt!=null?fields.unloadedAt:end) };
-  }
   function commitRun(mid, fields){
     var m=M(mid), run=state.machines[mid].running; if(!run) return;
     var end=Date.now();
@@ -751,18 +760,16 @@
         if(hEnd!=null) cex.hourEnd=hEnd;
         if((cex.hourStart==null||cex.hourStart==="")&&hStart!=null) cex.hourStart=hStart;
         if(run.weighEntries&&run.weighEntries.length){ cex.weighEntries=(cex.weighEntries||[]).concat(run.weighEntries); cex.needsWeigh=true; }
-        if(run.crumbAdded) cex.crumbAdded=Math.round(((cex.crumbAdded||0)+run.crumbAdded)*100)/100;
         if(run.formulation && !cex.formulation) cex.formulation=run.formulation;
         if(run.tyreType) cex.tyreType=run.tyreType;
         if(m.kind==="autoclave" && !cex.autoclaveId) cex.autoclaveId=m.id;
         if(fields.loadedAt!=null && cex.loadedAt==null) cex.loadedAt=fields.loadedAt;
         if(fields.unloadedAt!=null) cex.unloadedAt=fields.unloadedAt;
-        if(m.kind==="autoclave"){ cex.loadings=(cex.loadings||[]).concat([acLoadEntry(run,fields,end)]); }
       } else {
         state.runs.push({
           id:uid(), device:state.settings.device||"", machine:m.name, machineId:m.id, short:m.short, kind:m.kind, line:run.line, shiftwise:true,
           shift:run.shift, shiftDate:run.shiftDate, supervisor:curShift().supervisor||"", formulation:run.formulation||"", capacity:run.capacity||"",
-          tyreType:run.tyreType||"", mesh:run.tyreType?TYRES[run.tyreType].mesh:"", crumb:!!m.crumb,
+          tyreType:run.tyreType||"", mesh:run.tyreType?TYRES[run.tyreType].mesh:"",
           batchId:"", batchNo:"", autoclaveId:(m.kind==="autoclave"?m.id:(run.autoclaveId||"")), paired:false, quality:"", passes:1,
           start:run.segStart||end, end:end, runtimeMin:runtimeMin, hoursRun:Math.round((runtimeMin/60)*100)/100,
           loadedAt:(fields.loadedAt!=null?fields.loadedAt:null), unloadedAt:(fields.unloadedAt!=null?fields.unloadedAt:null),
@@ -770,8 +777,6 @@
           hourStart:hStart==null?"":hStart, hourEnd:hEnd==null?"":hEnd,
           firewoodKg:fields.firewoodKg==null?"":fields.firewoodKg, workers:fields.workers==null?"":fields.workers,
           weightKg:"", weighEntries:(m.outWeight?(run.weighEntries||[]):undefined), needsWeigh:!!m.outWeight,
-          crumbAdded:(run.crumbAdded||0),
-          loadings:(m.kind==="autoclave"?[acLoadEntry(run,fields,end)]:undefined),
           synced:false, createdAt:end
         });
       }
@@ -812,7 +817,7 @@
       id:uid(), device:state.settings.device||"", machine:m.name, machineId:m.id, short:m.short, kind:m.kind, line:"special",
       batchId:b.id, batchNo:b.no, capacity:b.capacity, formulation:b.formulation,
       autoclaveId:b.autoclaveId||"", paired:!!b.paired, passes:1,
-      shiftDate:(run.shiftDate||curShift().date), shift:(run.shift||curShift().name), supervisor:curShift().supervisor||"",
+      shiftDate:curShift().date, shift:curShift().name, supervisor:curShift().supervisor||"",
       quality:run.quality||"", start:run.segStart||run.start||end, end:end, runtimeMin:runtimeMin,
       hoursRun:Math.round((runtimeMin/60)*100)/100,
       loadedAt:(fields.loadedAt!=null?fields.loadedAt:null), unloadedAt:(fields.unloadedAt!=null?fields.unloadedAt:null),
@@ -834,23 +839,14 @@
   /* ---- live weighing while a shiftwise machine (grinder/coarse) is running ---- */
   function liveWeighRun(mid){ var st=state.machines[mid]; return st&&st.running?st.running:null; }
   function addLiveWeigh(mid, kg){
-    var run=liveWeighRun(mid); if(!run) return; var m=M(mid);
+    var run=liveWeighRun(mid); if(!run) return;
     run.weighEntries=run.weighEntries||[];
     run.weighEntries.push(Math.round(kg*100)/100);
-    if(m.crumb && run.tyreType){                 // grinder crumb → into stock right away
-      addCrumb(TYRES[run.tyreType].store, kg);
-      run.crumbAdded=Math.round(((run.crumbAdded||0)+(parseFloat(kg)||0))*100)/100;
-    }
     save(); openLiveWeighSheet(mid);
   }
   function removeLiveWeigh(mid, idx){
-    var run=liveWeighRun(mid); if(!run||!run.weighEntries) return; var m=M(mid);
-    var kg=parseFloat(run.weighEntries[idx])||0;
+    var run=liveWeighRun(mid); if(!run||!run.weighEntries) return;
     run.weighEntries.splice(idx,1);
-    if(m.crumb && run.tyreType && kg>0){          // reverse the stock this entry added
-      takeCrumb(TYRES[run.tyreType].store, kg);
-      run.crumbAdded=Math.round(((run.crumbAdded||0)-kg)*100)/100; if(run.crumbAdded<0) run.crumbAdded=0;
-    }
     save(); openLiveWeighSheet(mid);
   }
   function openLiveWeighSheet(mid){
@@ -859,9 +855,8 @@
     var list = entries.length ? '<div class="weighlist">'+entries.map(function(v,i){ return '<div class="weighrow"><span class="tnum">'+v+' kg</span><button class="wdel" data-lwdel="'+i+'" aria-label="remove">✕</button></div>'; }).join("")+'</div>'
       : '<div class="hint" style="margin:4px 0 12px">Add each load as it comes off — they keep adding up while the machine runs. Finalise &amp; submit in the Weigh tab after you stop it.</div>';
     openSheet('<div class="sheet-h"><span class="led" style="background:radial-gradient(circle at 35% 30%,#cfe0ee,var(--steel))"></span><b>Add weight — '+esc(m.name)+'</b></div>'+
-      '<div class="sheet-sub">'+(run.line==="grind"?'Grinder crumb · ':'Coarse · ')+esc(run.shift)+' · '+esc(fmtDay(run.shiftDate))+(run.tyreType?' · '+esc(TYRES[run.tyreType].mesh):'')+'</div>'+
-      '<div class="ro" style="margin-bottom:14px"><span class="k">'+(m.crumb?'Added to crumb so far':'Running total')+'</span><span class="v" style="color:var(--elec)">'+total+' kg</span></div>'+
-      (m.crumb?'<div class="hint" style="margin:-8px 0 12px">Each weighing goes straight into '+(run.tyreType?esc(TYRES[run.tyreType].label)+' ':'')+'crumb stock — autoclaves can load it right away. The shift total is finalised in the Weigh tab after you stop.</div>':'')+
+      '<div class="sheet-sub">'+(run.line==="grind"?'Grinder output · ':'Coarse · ')+esc(run.shift)+' · '+esc(fmtDay(run.shiftDate))+(run.tyreType?' · '+esc(TYRES[run.tyreType].mesh):'')+'</div>'+
+      '<div class="ro" style="margin-bottom:14px"><span class="k">Running total</span><span class="v" style="color:var(--elec)">'+total+' kg</span></div>'+
       list+
       '<div class="sheet-label">Add a weighing</div>'+
       '<div class="field-inline" style="align-items:stretch"><div class="field" style="flex:2;margin-bottom:0"><div class="num-suffix"><input id="lw-add" type="number" inputmode="decimal" placeholder="0"><span class="sfx">kg</span></div></div>'+
@@ -904,7 +899,7 @@
     }
     var c=curShift();
     state.conversions.push({ id:uid(), device:state.settings.device||"", batchNo:specialRow.batchNo, qty:qty, stage:stage,
-      ts:end, shiftDate:(c.date||specialRow.shiftDate||""), shift:(c.name||specialRow.shift||""), supervisor:c.supervisor||"", synced:false });
+      ts:end, shiftDate:c.date, shift:c.name, supervisor:c.supervisor||"", synced:false });
   }
   function convertAtWeigh(runId, qty){
     var r=weighRow(runId); if(!r) return;
@@ -938,34 +933,7 @@
     var r=weighRow(runId); if(!r) return; var t=sum(r.weighEntries);
     if(t<=0){ toast("Add a weight first","warn"); return; }
     r.weightKg=t; r.synced=false;
-    var msg="Weight submitted · "+t+" kg";
-    if(r.crumb && r.tyreType){
-      var already=Math.round((r.crumbAdded||0)*100)/100;
-      var add=Math.max(0, Math.round((t-already)*100)/100);
-      if(add>0) addCrumb(TYRES[r.tyreType].store, add);
-      msg = already>0
-        ? t+" kg total · "+add+" kg added now ("+already+" kg already in stock from the shift)"
-        : t+" kg added to "+TYRES[r.tyreType].label+" crumb ("+TYRES[r.tyreType].mesh+")";
-    }
-    save(); closeSheet(); render(); toast(msg,"ok");
-  }
-  function submitShiftTotal(runId, total){
-    var r=weighRow(runId); if(!r) return;
-    if(total==null || total<0){ toast("Enter the total shift weight","warn"); return; }
-    total=Math.round(total*100)/100;
-    var already=Math.round((r.crumbAdded||0)*100)/100;
-    var delta=Math.round((total-already)*100)/100;          // only the part not yet in stock
-    if(r.crumb && r.tyreType){
-      if(delta>0) addCrumb(TYRES[r.tyreType].store, delta);
-      else if(delta<0) takeCrumb(TYRES[r.tyreType].store, -delta);   // total revised down
-      r.crumbAdded=total;                                   // stock now reflects the full shift total
-    }
-    r.weightKg=total; r.synced=false;
-    save(); closeSheet(); render();
-    var msg = already>0
-      ? total+" kg shift total · "+(delta>=0?("added "+delta+" kg now"):("adjusted "+delta+" kg"))+" ("+already+" kg already added live)"
-      : total+" kg added to "+TYRES[r.tyreType].label+" crumb ("+TYRES[r.tyreType].mesh+")";
-    toast(msg,"ok");
+    save(); closeSheet(); render(); toast("Weight submitted · "+t+" kg","ok");
   }
   var syncing=false, autoTimer=null;
   function autoSyncOn(){ return !!(state && state.settings) && state.settings.autoSync!==false; }
@@ -1022,7 +990,8 @@
   function bearingToSb(x){ return {
     id:x.id, device:sbStr(x.device), machine_id:sbStr(x.machineId), machine:sbStr(x.machine),
     position:sbStr(x.position), bearing_type:sbStr(x.bearingType), temp_c:sbN(x.tempC),
-    ts:sbISO(x.ts==null?null:+new Date(x.ts)), logged_at:sbISO(x.loggedAt==null?null:+new Date(x.loggedAt)), shift_date:sbN(x.shiftDate), shift:sbN(x.shift), supervisor:sbN(x.supervisor) }; }
+    ts:sbISO(x.ts==null?null:+new Date(x.ts)), recorded_at:sbISO(x.recordedAt!=null?x.recordedAt:(x.ts==null?null:+new Date(x.ts))), logged_at:sbISO(x.loggedAt!=null?x.loggedAt:null),
+    shift_date:sbN(x.shiftDate), shift:sbN(x.shift), supervisor:sbN(x.supervisor) }; }
   function convToSb(x){ return {
     id:x.id, device:sbStr(x.device), batch_no:sbStr(x.batchNo), from_quality:"Special", to_quality:"SuperFine",
     qty_kg:sbN(x.qty), stage:sbStr(x.stage), ts:sbISO(x.ts), shift_date:sbN(x.shiftDate), shift:sbN(x.shift), supervisor:sbN(x.supervisor) }; }
@@ -1073,6 +1042,50 @@
       if(!res.ok && res.status!==404) return res.text().then(function(t){ throw new Error("HTTP "+res.status+" "+(t||"").slice(0,120)); });
       return true;
     });
+  }
+  function sbDeleteAll(table){
+    var base=(state.settings.supabaseUrl||"").trim().replace(/\/+$/,"");
+    var key=(state.settings.supabaseKey||"").trim();
+    return fetch(base+"/rest/v1/"+table+"?id=not.is.null",{
+      method:"DELETE",
+      headers:{ "apikey":key, "Authorization":"Bearer "+key, "Prefer":"return=minimal" }
+    }).then(function(res){ return res.ok || res.status===404; });
+  }
+  /* Push a fresh (empty) plant snapshot at a higher version so it sticks. Without bumping
+     the version past the server's, the next pull would just re-apply the old data. */
+  function pushEmptyPlant(){
+    var base=sharedBase(), key=sharedKey(); if(!base||!key) return Promise.resolve(false);
+    return fetch(base+"/rest/v1/shared_state?id=eq.plant&select=version",{
+      headers:{ "apikey":key, "Authorization":"Bearer "+key }
+    }).then(function(r){ return r.ok?r.json():[]; }).then(function(rows){
+      var rv=(rows&&rows[0])?(+rows[0].version||0):0;
+      var newV=Math.max(rv, +state.sharedVersion||0)+1;
+      var dev=(state.settings.device||"Tablet"), iso=new Date().toISOString();
+      var doc=buildSharedDoc()||{};
+      return fetch(base+"/rest/v1/shared_state?on_conflict=id",{ method:"POST",
+        headers:{ "apikey":key, "Authorization":"Bearer "+key, "Content-Type":"application/json", "Prefer":"resolution=merge-duplicates,return=minimal" },
+        body:JSON.stringify([{ id:"plant", doc:doc, version:newV, updated_by:dev, updated_at:iso }]) })
+        .then(function(res){ if(res.ok){ state.sharedVersion=newV; state.lastSharedBy=dev; state.lastSharedAt=iso; store.write(JSON.stringify(state)); } return true; });
+    });
+  }
+  function resetDevice(){
+    var keep=state.settings;                              // keep this device's connection + role + pin + name
+    var target=syncTarget(), base=sharedBase(), key=sharedKey();
+    state=blank(); state.settings=keep; state.seededDispatchDemo=true;   // don't re-seed demo dispatches
+    MACHINES.forEach(function(m){ state.machines[m.id]={running:null,down:null}; });
+    if(typeof localStorage!=="undefined"){ try{ localStorage.removeItem("qcUploadQueue"); localStorage.removeItem("clUploadQueue"); }catch(e){} }
+    store.write(JSON.stringify(state));
+    closeSheet(); active="machines"; render();
+    if(target==="supabase" && base && key){
+      toast("Reset · clearing the cloud…","ok");
+      var tables=["runs","dispatches","dispatch_load_items","dispatch_loads","maintenance","bearing_logs","conversions","quality_tests","shifts"];
+      Promise.all(tables.map(function(tb){ return sbDeleteAll(tb).catch(function(){ return false; }); }))
+        .then(function(){ return pushEmptyPlant(); })
+        .then(function(){ if(!sheetIsOpen()) render(); toast("Device reset · cloud cleared","ok"); })
+        .catch(function(){ toast("Reset locally — cloud clear incomplete (will retry on sync)","warn"); });
+    } else {
+      toast("Device reset","ok");
+    }
   }
   function syncErr(e){
     var m=(e&&e.message)||"no connection";
@@ -1292,7 +1305,7 @@
   }
 
   function exportCSV(){
-    var cols=["id","device","machine","autoclaveId","shift","shiftDate","supervisor","batchNo","capacity","formulation","quality","start","end","runtimeMin","hoursRun","passes","kWh","firewoodKg","workers","weightKg","synced"];
+    var cols=["id","device","machine","autoclaveId","shift","shiftDate","batchNo","capacity","formulation","quality","start","end","runtimeMin","hoursRun","passes","kWh","firewoodKg","workers","weightKg","synced"];
     var lines=[cols.join(",")];
     state.runs.forEach(function(r){
       lines.push(cols.map(function(c){
@@ -1309,7 +1322,6 @@
   /* ===================== views ===================== */
   var active="machines";
   var lastTab=null;
-  var HV=null;   // history audit view state: { date, shift, machine }
   var TABS=[
     {id:"machines",label:"Machines",icon:'<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>'},
     {id:"batches",label:"Batches",icon:'<path d="M12 2 3 7l9 5 9-5-9-5Z"/><path d="M3 17l9 5 9-5"/><path d="M3 12l9 5 9-5"/>'},
@@ -1318,8 +1330,7 @@
     {id:"dispatch",label:"Dispatch",icon:'<path d="M1 3h13v10H1z"/><path d="M14 7h4l3 3v3h-7z"/><circle cx="6" cy="17" r="2"/><circle cx="17" cy="17" r="2"/>'},
     {id:"quality",label:"Quality",icon:'<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>'},
     {id:"history",label:"History",icon:'<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 4v4h4"/><path d="M12 8v4l3 2"/>'},
-    {id:"bearings",label:"Bearings",icon:'<path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0Z"/>'},
-    {id:"reports",label:"Reports",icon:'<path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M22 20H2"/>'}
+    {id:"bearing",label:"Bearing",icon:'<path d="M12 14.5V6"/><circle cx="12" cy="17.5" r="3.4"/><path d="M9 6a3 3 0 0 1 6 0"/>'}
   ];
 
   function allowedTabs(){
@@ -1331,7 +1342,7 @@
   function renderTabs(){
     var pw=pendingWeigh().length, pp=pendingPack().length, pq=pendingQC(), pb=dueMachines().length;
     document.getElementById("tabs").innerHTML=allowedTabs().map(function(t){
-      var n=(t.id==="weigh")?pw:(t.id==="packing"?pp:(t.id==="quality"?pq:(t.id==="bearings"?pb:0)));
+      var n=(t.id==="weigh")?pw:(t.id==="packing"?pp:(t.id==="quality"?pq:(t.id==="bearing"?pb:0)));
       var badge=(n>0)?'<i class="tabbadge">'+n+'</i>':'';
       return '<button data-tab="'+t.id+'" class="'+(active===t.id?"active":"")+'">'+badge+
         '<svg viewBox="0 0 24 24">'+t.icon+'</svg><span>'+t.label+'</span></button>';
@@ -1351,16 +1362,11 @@
       var hdr='<div class="msec"><b>'+esc(g.name)+'</b><div class="ln"></div>'+(run?'<span class="ct">'+run+' running</span>':'')+'</div>';
       return hdr+'<div class="mlist">'+g.items.map(machineCard).join("")+'</div>';
     }).join("");
-    var crumbBar='<div class="crumbbar">'+
-      '<div class="crumbcell"><span class="cl">Truck crumb · 30#</span><span class="cv tnum">'+crumbAvail("truck")+' <small>kg</small></span><span class="cu">special line</span></div>'+
-      '<div class="crumbcell"><span class="cl">Bike crumb · 20#</span><span class="cv tnum">'+crumbAvail("bike")+' <small>kg</small></span><span class="cu">coarse line</span></div>'+
-      '</div>';
     var due=dueMachines();
     var dueBar = due.length ? '<div class="duebar" data-bearings-any="1">🌡 '+due.length+' machine'+(due.length>1?'s':'')+' due for bearing temp logging — '+due.map(function(m){return esc(m.short);}).join(", ")+' · tap to log</div>' : '';
     var c=curShift();
     var sup = c.supervisor ? esc(c.supervisor) : '<span style="color:var(--amber)">set supervisor</span>';
-    var dateTxt = c.date ? esc(fmtDay(c.date)) : '<span style="color:var(--amber)">set date</span>';
-    return '<div class="view-head"><h1>Machines</h1><div class="meta"><span class="shiftchip" data-shift="1"><b>'+esc(c.name)+'</b> · '+dateTxt+' · 👤 '+sup+' <span style="opacity:.6">▾</span></span></div></div>'+dueBar+crumbBar+body;
+    return '<div class="view-head"><h1>Machines</h1><div class="meta"><span class="shiftchip" data-shift="1"><b>'+esc(c.name)+'</b> · '+esc(fmtDay(c.date))+' · 👤 '+sup+' <span style="opacity:.6">▾</span></span></div></div>'+dueBar+body;
   }
   function lastRunFor(mid){
     var last=null;
@@ -1485,7 +1491,7 @@
   /* ----- shift context & report ----- */
   function openShiftPicker(){ var c=curShift(); var pick={name:c.name};
     openSheet('<div class="sheet-h"><b>Shift &amp; supervisor</b></div>'+
-      '<div class="sheet-sub">Pick the production date on the calendar, set the shift, and who is in charge \u2014 it is tagged on everything logged this shift.</div>'+
+      '<div class="sheet-sub">The shift follows the clock automatically. Set who is in charge — it is tagged on everything logged this shift.</div>'+
       '<div class="field"><label>Supervisor in charge</label><select id="sh-sup">'+
         '<option value="">— select —</option>'+
         SUPERVISORS.map(function(n){ return '<option value="'+esc(n)+'"'+(c.supervisor===n?' selected':'')+'>'+esc(n)+'</option>'; }).join("")+
@@ -1494,89 +1500,57 @@
       '<div class="sheet-label">Shift</div><div class="pickgrid q4">'+
         '<button class="pick'+(c.name==="Day"?" sel":"")+'" data-shift-set="Day"><b>Day</b></button>'+
         '<button class="pick'+(c.name==="Night"?" sel":"")+'" data-shift-set="Night"><b>Night</b></button></div>'+
-      '<div class="field" style="margin-top:14px"><label>Production date <span class="muted" style="text-transform:none;letter-spacing:0">\u2014 pick on the calendar</span></label><input id="sh-date" type="date" value="'+esc(c.date||"")+'"></div>'+
+      '<div class="field" style="margin-top:14px"><label>Date <span class="muted" style="text-transform:none;letter-spacing:0">— auto today</span></label><input id="sh-date" type="date" value="'+esc(c.date)+'"></div>'+
       '<div class="sheet-actions"><button class="btn primary block" id="sh-done">Save</button></div>');
     sheet.querySelectorAll("[data-shift-set]").forEach(function(el){ el.addEventListener("click",function(){
       pick.name=el.getAttribute("data-shift-set");
       sheet.querySelectorAll("[data-shift-set]").forEach(function(g){ g.classList.remove("sel"); }); el.classList.add("sel"); }); });
     sheet.querySelector("#sh-done").addEventListener("click",function(){
-      var date=(sheet.querySelector("#sh-date").value||"").trim(), sup=(sheet.querySelector("#sh-sup").value||"").trim();
-      if(!date){ toast("Pick the production date on the calendar","warn"); return; }
+      var date=(sheet.querySelector("#sh-date").value||c.date), sup=(sheet.querySelector("#sh-sup").value||"").trim();
       setShift(pick.name,date,sup); closeSheet(); toast("Saved · "+pick.name+(sup?" · "+sup:""),"ok"); }); }
 
-  function shiftAgg(key){
-    var parts=key.split("|"), date=parts[0], shift=parts[1];
-    var a={date:date,shift:shift,reclaim:0,crumb:0,crumb30:0,crumb20:0,coarse:0,kwh:0,fw:0,min:0,runs:0,byQ:{}};
-    QUALITIES.forEach(function(q){ a.byQ[q]=0; });
-    state.runs.forEach(function(r){
-      if((r.shiftDate||"")!==date || (r.shift||"")!==shift) return;
-      a.runs++;
-      if(r.kWh!=="") a.kwh+=parseFloat(r.kWh)||0;
-      if(r.firewoodKg!=="") a.fw+=parseFloat(r.firewoodKg)||0;
-      if(r.runtimeMin) a.min+=r.runtimeMin;
-      var w=(r.weightKg!==""&&r.weightKg!=null)?(parseFloat(r.weightKg)||0):0;
-      if(r.machineId==="R4"&&r.quality){ a.reclaim+=w; a.byQ[r.quality]=(a.byQ[r.quality]||0)+w; }
-      if(r.line==="grind"){ a.crumb+=w; if(r.mesh==="30#") a.crumb30+=w; else if(r.mesh==="20#") a.crumb20+=w; }
-      if(r.line==="coarse"&&r.machineId==="R2") a.coarse+=w;
-    });
-    return a;
-  }
-  function openShiftReport(key){ var a=shiftAgg(key);
-    function ln(k,v){ return '<div class="dline"><span>'+k+'</span><span class="tnum"><b>'+v+'</b></span></div>'; }
-    var qlines=QUALITIES.filter(function(q){ return a.byQ[q]>0; }).map(function(q){ return ln('&nbsp;&nbsp;'+q, Math.round(a.byQ[q]*10)/10+' kg'); }).join("");
-    openSheet('<div class="sheet-h"><b>'+esc(a.shift)+' shift · '+esc(fmtDay(a.date))+'</b></div>'+
-      '<div class="sheet-sub">Production captured on this shift.</div>'+
-      '<div class="dlist">'+
-        ln('Reclaim produced (special)', '<span style="color:var(--amber)">'+Math.round(a.reclaim*10)/10+' kg</span>')+qlines+
-        ln('Crumb produced', Math.round(a.crumb*10)/10+' kg')+
-        ln('&nbsp;&nbsp;Truck 30#', Math.round(a.crumb30*10)/10+' kg')+
-        ln('&nbsp;&nbsp;Bike 20#', Math.round(a.crumb20*10)/10+' kg')+
-        ln('Coarse output', Math.round(a.coarse*10)/10+' kg')+
-        ln('Electricity consumed', '<span style="color:var(--elec)">'+Math.round(a.kwh*10)/10+' kWh</span>')+
-        ln('Firewood', Math.round(a.fw)+' kg')+
-        ln('Machine hours', Math.round(a.min/60*10)/10+' h')+
-        ln('Runs logged', a.runs)+
-      '</div>'+
-      '<div class="sheet-actions"><button class="btn primary block" data-act="close">Close</button></div>'); }
 
   function fmtAgo(ms){ var s=Math.round((Date.now()-ms)/1000); if(s<60) return s+"s ago"; var mn=Math.round(s/60); if(mn<60) return mn+"m ago"; var h=Math.floor(mn/60); var rem=mn%60; return h+"h"+(rem?" "+rem+"m":"")+" ago"; }
   function openBearingSheet(mid){
     var m=M(mid), spec=bearingSpec(m); if(!spec) return;
-    var label=spec.type==="bush"?"Bush":"Bearing", last=lastBearingLog(mid);
+    var label=spec.type==="bush"?"Bush":"Bearing", last=lastBearingLog(mid), c=curShift();
     function lastTempFor(pos){ var best=null; (state.bearingLogs||[]).forEach(function(x){ if(x.machineId===mid&&x.position===pos){ if(!best||+new Date(x.ts)>+new Date(best.ts)) best=x; } }); return best; }
     var rows=spec.positions.map(function(pos,i){
       var lt=lastTempFor(pos);
       return '<div class="field"><label>'+label+' '+esc(pos)+(lt?' <span class="muted" style="text-transform:none;letter-spacing:0">— last '+lt.tempC+'°C, '+fmtAgo(+new Date(lt.ts))+'</span>':'')+'</label>'+
         '<div class="num-suffix"><input id="bt-'+i+'" type="number" inputmode="decimal" placeholder="temperature"><span class="sfx">°C</span></div></div>';
     }).join("");
-    var dueNote = bearingDue(m) ? '<div class="hint" style="color:var(--amber);margin-top:-2px">⚠ Overdue — log now.</div>' : '';
-    var whenField='<div class="field" style="margin-top:6px"><label>Recorded at <span class="muted" style="text-transform:none;letter-spacing:0">— leave blank to log now, or pick the date &amp; time it was read</span></label>'+
-      '<input id="bt-when" type="datetime-local" value="" max="'+esc(localDTValue(Date.now()))+'"></div>';
+    var supOpts=SUPERVISORS.map(function(s){ return '<option value="'+esc(s)+'"'+((c.supervisor||"")===s?' selected':'')+'>'+esc(s)+'</option>'; }).join("");
+    var dueNote = bearingDue(m) ? '<div class="hint" style="color:var(--amber);margin-top:-2px">⚠ Overdue — log now, or set the actual reading time below if it was taken earlier.</div>' : '';
     openSheet('<div class="sheet-h"><span class="led" style="background:radial-gradient(circle at 35% 30%,#9fe0ea,var(--elec))"></span><b>'+label+' temps — '+esc(m.name)+'</b></div>'+
       '<div class="sheet-sub">'+spec.positions.length+' '+label.toLowerCase()+(spec.positions.length>1?'s':'')+' · log every '+spec.intervalH+'\u00a0hour'+(spec.intervalH>1?'s':'')+' while running'+(last!=null?' · last '+fmtAgo(last):' · not logged yet')+'.</div>'+
-      dueNote+rows+whenField+
+      dueNote+rows+
+      '<div class="field-inline">'+
+        '<div class="field"><label>Supervisor</label><select id="bt-sup"><option value="">—</option>'+supOpts+'</select></div>'+
+        '<div class="field"><label>Reading time <span class="muted" style="text-transform:none;letter-spacing:0">— blank = now</span></label><input id="bt-time" type="time"></div></div>'+
       '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button>'+
       '<button class="btn primary" id="bt-go">Log temperatures</button></div>');
     sheet.querySelector("#bt-go").addEventListener("click",function(){
       var temps=spec.positions.map(function(pos,i){ return { pos:pos, v:num(sheet.querySelector("#bt-"+i).value) }; });
-      var w=sheet.querySelector("#bt-when"), recMs=w?parseLocalDT(w.value):null;
-      if(recMs!=null && recMs>Date.now()) recMs=Date.now();   // never a future reading
-      commitBearings(mid, temps, recMs);
+      var sup=sheet.querySelector("#bt-sup").value||"";
+      var tv=(sheet.querySelector("#bt-time")||{}).value||"";
+      var recordedAt=Date.now();
+      if(tv){ var ms=Date.parse(todayISO()+"T"+tv); if(!isNaN(ms)){ if(ms>Date.now()) ms-=86400000; recordedAt=ms; } }   // a future clock time means earlier today/last night
+      commitBearings(mid, temps, sup, recordedAt);
     });
   }
-  function commitBearings(mid, temps, recordedMs){
+  function commitBearings(mid, temps, supervisor, recordedAt){
     if(!temps.some(function(t){ return t.v!=null; })){ toast("Enter at least one temperature","warn"); return; }
     var m=M(mid), spec=bearingSpec(m), c=curShift();
-    var nowMs=Date.now();
-    var readMs=(recordedMs!=null?recordedMs:nowMs);
-    var ts=new Date(readMs).toISOString();              // ts = when the reading was actually taken
-    var late=(nowMs-readMs)>=15*60000;                  // entered 15 min+ after the reading
-    var loggedAt=late?nowMs:null;                        // record entry time only when meaningfully later
+    var rec=(recordedAt!=null?recordedAt:Date.now());
+    var ts=new Date(rec).toISOString();          // ts drives the schedule, so it reflects the ACTUAL reading time
+    var sup=(supervisor!=null&&supervisor!=="")?supervisor:(c.supervisor||"");
     state.bearingLogs=state.bearingLogs||[];
     temps.forEach(function(t){ if(t.v==null) return;
       state.bearingLogs.push({ id:uid(), device:state.settings.device||"", machineId:mid, machine:m.name,
-        position:t.pos, bearingType:spec.type, tempC:t.v, ts:ts, loggedAt:loggedAt, shiftDate:c.date, shift:c.name, supervisor:c.supervisor||"", synced:false }); });
-    save(); closeSheet(); render(); toast(m.short+" "+spec.type+" temps logged"+(late?" (back-dated)":""),"ok");
+        position:t.pos, bearingType:spec.type, tempC:t.v, ts:ts, recordedAt:rec, loggedAt:Date.now(),
+        shiftDate:c.date, shift:c.name, supervisor:sup, synced:false }); });
+    save(); closeSheet(); render(); toast(m.short+" "+spec.type+" temps logged","ok");
   }
 
   function viewBatches(){
@@ -1629,18 +1603,15 @@
         "Nothing to weigh","Finish R4 (special), a coarse R2 shift, or a grinder shift and it lands here.");
     var cards=p.slice().reverse().map(function(r){
       var draft=sum(r.weighEntries), n=(r.weighEntries||[]).length, sw=!!r.shiftwise, grind=r.line==="grind";
-      var isCrumb = sw && r.crumb && r.tyreType;
       var chipBg = grind?"var(--steel);color:#0e1a08":"var(--ember)";
       var head = sw
         ? '<span class="batchref">'+esc(r.short)+'</span><span class="qchip shift" style="background:'+chipBg+'">'+esc(r.shift)+'</span>'+(r.tyreType?'<span class="formchip" style="color:var(--steel)">'+esc(TYRES[r.tyreType].mesh)+'</span>':'')
         : '<span class="batchref">'+esc(r.batchNo)+'</span>'+qchip(r.quality);
-      var label = sw ? ((grind?'Grinder crumb · ':'Coarse · ')+esc(fmtDay(r.shiftDate))) : (esc(r.formulation)+' · R4 '+fmtClock(r.end));
-      var prog = isCrumb
-        ? '<small style="color:var(--ok)">'+Math.round((r.crumbAdded||0)*100)/100+' kg in stock · log shift total</small>'
-        : (n>0 ? '<small style="color:var(--elec)">'+draft+' kg so far · '+n+' weighing'+(n>1?'s':'')+'</small>'
+      var label = sw ? ((grind?'Grinder output · ':'Coarse · ')+esc(fmtDay(r.shiftDate))) : (esc(r.formulation)+' · R4 '+fmtClock(r.end));
+      var prog = (n>0 ? '<small style="color:var(--elec)">'+draft+' kg so far · '+n+' weighing'+(n>1?'s':'')+'</small>'
                : '<small>'+label+'</small>');
       return '<div class="wcard"><div class="info"><div class="row1">'+head+'</div>'+prog+'</div>'+
-        '<button class="btn primary" data-weigh="'+r.id+'">'+(isCrumb?'Log total ▸':(n>0?'Resume ▸':'Weigh ▸'))+'</button></div>';
+        '<button class="btn primary" data-weigh="'+r.id+'">'+(n>0?'Resume ▸':'Weigh ▸')+'</button></div>';
     }).join("");
     return '<div class="view-head"><h1>Weigh</h1><div class="meta">'+p.length+' pending</div></div><div class="stack">'+cards+'</div>';
   }
@@ -1725,7 +1696,7 @@
     var hb=heldBatchMap(), hbKeys=Object.keys(hb), hc=heldCoarseList();
     var warn="";
     if(hbKeys.length || hc.length){
-      var parts=hbKeys.map(function(k){ var p=k.split("|"); return "Batch "+esc(p[0])+(p[1]?" \u00b7 "+esc(p[1]):""); }).concat(hc.map(function(t){ return "Coarse "+esc(fmtDay(t.shiftDate))+" "+esc(t.shift); }));
+      var parts=hbKeys.map(function(no){ return "Batch "+esc(no); }).concat(hc.map(function(t){ return "Coarse "+esc(fmtDay(t.shiftDate))+" "+esc(t.shift); }));
       warn='<div class="panel" style="border:1px solid var(--err);background:rgba(220,60,60,.08);margin-bottom:14px">'+
         '<div style="display:flex;gap:8px;align-items:flex-start"><span style="color:var(--err);font-size:18px;line-height:1">\u26a0</span>'+
         '<div><b style="color:var(--err)">QC hold \u2014 marked unfit</b><div class="bhint" style="margin-top:3px">'+parts.join(" \u00b7 ")+'</div>'+
@@ -1767,7 +1738,7 @@
     var itemsHtml = DD.items.length ? DD.items.map(function(it,i){
       var w=itemWeight(it), rf=DD.customer?rateFor(DD.customer,it.grade):null;
       var right = rf ? (rf.rate!=null ? fmtMoney(rf.rate*w)+' <small class="muted">@'+rf.rate+(rf.note?' '+rf.note:'')+'</small>' : '<small style="color:var(--err)">no rate</small>') : '<small class="muted">'+w+' kg</small>';
-      var held = it.batchNo && hbMap[String(it.batchNo)+"|"+it.grade];
+      var held = it.batchNo && hbMap[String(it.batchNo)];
       var holdTag = held ? ' <span class="qchip" style="background:var(--err);color:#fff;font-size:9px">QC HOLD</span>' : '';
       return '<div class="weighrow"'+(held?' style="border-left:3px solid var(--err);padding-left:8px"':'')+'><span><b>'+esc(it.grade)+'</b>'+(it.batchNo?' <span class="muted">'+esc(it.batchNo)+'</span>':'')+holdTag+' \u00b7 '+(it.sacks!=null&&it.sacks!==""?esc(it.sacks)+' sacks \u00b7 ':'')+w+' kg</span>'+
         '<span style="display:flex;align-items:center;gap:8px">'+right+'<button class="wdel" data-del-item="'+i+'" aria-label="remove">\u2715</button></span></div>';
@@ -1826,7 +1797,7 @@
     if(DD.ownVehicle && !DD.driver){ toast("Pick the driver for our vehicle","warn"); return; }
     if(!DD.ownVehicle && !DD.vehicleNo){ toast("Enter the vehicle number","warn"); return; }
     var hbMap=heldBatchMap();
-    var heldNos=DD.items.filter(function(it){ return it.batchNo && hbMap[String(it.batchNo)+"|"+it.grade]; }).map(function(it){ return it.batchNo+" "+it.grade; });
+    var heldNos=DD.items.filter(function(it){ return it.batchNo && hbMap[String(it.batchNo)]; }).map(function(it){ return it.batchNo; });
     if(!force && heldNos.length){
       openSheet('<div class="sheet-h"><span class="led" style="background:radial-gradient(circle at 35% 30%,#ffb3b3,var(--err));box-shadow:0 0 10px 1px var(--err)"></span><b>QC hold on this load</b></div>'+
         '<div class="sheet-sub">Batch '+esc(heldNos.join(", "))+' was marked <b style="color:var(--err)">unfit</b> by QC. You can still dispatch \u2014 it\u2019s your call.</div>'+
@@ -1877,32 +1848,48 @@
   }
 
   /* ================= Quality control (QC) module ================= */
-  var QC_PARAM_SUGGEST=["Carbon black %","Rubber content %","Specific gravity","Mooney viscosity","Ash %","Acetone extract %","Tensile (MPa)","Elongation %","Hardness (Shore A)","Fineness / mesh","Moisture %","Contamination"];
+  var QC_PARAM_SUGGEST=["Specific gravity","Mooney viscosity","Ash %","Acetone extract %","Tensile (MPa)","Elongation %","Hardness (Shore A)","Fineness / mesh","Moisture %","Contamination"];
   function qcKeyCoarse(date,shift){ return (date||"")+"|"+(shift||""); }
-  function qcLatestBatch(no){
-    var arr=(state.qualityTests||[]).filter(function(q){ return q.kind==="batch" && String(q.batchNo)===String(no); });
-    if(!arr.length) return null; arr.sort(function(a,b){ return (b.ts||0)-(a.ts||0); }); return arr[0];
-  }
-  // QC is logged per grade/quality within a batch: every quality the batch yields gets its own inspection.
+  /* Batch QC is now QUALITY-WISE: one verdict per grade (Special/SuperFine/Fine/Medium/DRC). */
+  function qcGradesFor(b){ return (b && b.qualities && b.qualities.length) ? b.qualities.slice() : QUALITIES.slice(); }
   function qcLatestBatchQ(no, quality){
     var arr=(state.qualityTests||[]).filter(function(q){ return q.kind==="batch" && String(q.batchNo)===String(no) && (q.quality||"")===(quality||""); });
     if(!arr.length) return null; arr.sort(function(a,b){ return (b.ts||0)-(a.ts||0); }); return arr[0];
   }
-  // Qualities to inspect for a batch = the grades actually taken off it.
-  function batchQualities(b){ return (b && b.qualities && b.qualities.length) ? b.qualities.slice() : []; }
+  function qcLatestBatch(no){   // latest test of ANY grade for this batch (for summaries)
+    var arr=(state.qualityTests||[]).filter(function(q){ return q.kind==="batch" && String(q.batchNo)===String(no); });
+    if(!arr.length) return null; arr.sort(function(a,b){ return (b.ts||0)-(a.ts||0); }); return arr[0];
+  }
+  function qcBatchSummary(b){
+    var grades=qcGradesFor(b), pass=0, hold=0, untested=0;
+    grades.forEach(function(g){ var t=qcLatestBatchQ(b.no,g); if(!t) untested++; else if(t.verdict==="hold") hold++; else pass++; });
+    return { grades:grades, pass:pass, hold:hold, untested:untested, anyHold:hold>0, allDone:untested===0 };
+  }
   function qcLatestCoarse(date,shift){
     var arr=(state.qualityTests||[]).filter(function(q){ return q.kind==="coarse" && (q.shiftDate||"")===(date||"") && (q.shift||"")===(shift||""); });
     if(!arr.length) return null; arr.sort(function(a,b){ return (b.ts||0)-(a.ts||0); }); return arr[0];
   }
   function coarseShifts(){ var seen={}, out=[]; (state.runs||[]).forEach(function(r){ if(r.line==="coarse"){ var k=qcKeyCoarse(r.shiftDate,r.shift); if(!seen[k]){ seen[k]=1; out.push({ shiftDate:r.shiftDate, shift:r.shift, formulation:r.formulation||"", ts:r.end||r.ts||0 }); } } }); return out; }
-  function pendingQC(){ var n=0; (state.batches||[]).forEach(function(b){ batchQualities(b).forEach(function(q){ if(!qcLatestBatchQ(b.no,q)) n++; }); }); coarseShifts().forEach(function(c){ if(!qcLatestCoarse(c.shiftDate,c.shift)) n++; }); return n; }
-  // Held grades keyed by "batchNo|quality" so dispatch warns only for the exact grade on hold.
-  function heldBatchMap(){ var s={}; (state.qualityTests||[]).forEach(function(q){ if(q.kind==="batch"){ var t=qcLatestBatchQ(q.batchNo,q.quality); if(t&&t.verdict==="hold") s[String(q.batchNo)+"|"+(q.quality||"")]=t; } }); return s; }
+  function pendingQC(){ var n=0; (state.batches||[]).forEach(function(b){ if(!qcBatchSummary(b).allDone) n++; }); coarseShifts().forEach(function(c){ if(!qcLatestCoarse(c.shiftDate,c.shift)) n++; }); return n; }
+  function heldBatchMap(){ var s={}; (state.batches||[]).forEach(function(b){ if(qcBatchSummary(b).anyHold) s[String(b.no)]=qcLatestBatch(b.no); }); return s; }
   function heldCoarseList(){ var seen={}, out=[]; (state.qualityTests||[]).forEach(function(q){ if(q.kind!=="coarse") return; var k=qcKeyCoarse(q.shiftDate,q.shift); if(seen[k]) return; seen[k]=1; var t=qcLatestCoarse(q.shiftDate,q.shift); if(t&&t.verdict==="hold") out.push(t); }); return out; }
   function qcChip(t){
     if(!t) return '<span class="qchip shift" style="background:var(--steel);color:#0e1a08">Untested</span>';
     if(t.verdict==="hold") return '<span class="qchip" style="background:var(--err);color:#fff">HOLD · unfit</span>';
     return '<span class="qchip" style="background:var(--ok);color:#06210a">Passed</span>';
+  }
+  function qcBatchChip(s){
+    if(s.anyHold) return '<span class="qchip" style="background:var(--err);color:#fff">HOLD · '+s.hold+'</span>';
+    if(s.allDone) return '<span class="qchip" style="background:var(--ok);color:#06210a">All passed</span>';
+    if(s.pass>0) return '<span class="qchip shift" style="background:var(--pause);color:#2a1f06">'+s.pass+'/'+s.grades.length+' done</span>';
+    return '<span class="qchip shift" style="background:var(--steel);color:#0e1a08">Untested</span>';
+  }
+  function qcGradeStrip(b){
+    var s=qcBatchSummary(b);
+    return '<div class="bgrade">'+s.grades.map(function(g){
+      var t=qcLatestBatchQ(b.no,g); var cls=t?(t.verdict==="hold"?"hold":"pass"):"";
+      return '<span class="gradetag '+cls+'"><span class="gd"></span>'+esc(g)+'</span>';
+    }).join("")+'</div>';
   }
 
   function viewQuality(){
@@ -1914,23 +1901,17 @@
         "Nothing to test yet","Once a special batch is loaded or a coarse shift is recorded, it shows up here for you to log results.");
     var out=head;
     if(batches.length){
-      out+='<div class="sheet-label" style="margin:4px 2px 8px">Special batches</div><div class="stack">';
+      out+='<div class="sheet-label" style="margin:4px 2px 8px">Special batches <span class="muted" style="text-transform:none;letter-spacing:0">— pass / hold per grade</span></div><div class="stack">';
       out+=batches.map(function(b){
-        var qs=batchQualities(b);
-        var header='<div class="bhead"><div class="l"><span class="batchref" style="font-size:16px">'+esc(b.no)+'</span>'+
-          '<span class="formchip">'+esc(b.formulation||"")+'</span></div>'+
-          (qs.length?'<span class="bstate cook" style="background:none;color:var(--ink-faint)">'+qs.filter(function(q){return qcLatestBatchQ(b.no,q);}).length+'/'+qs.length+' tested</span>':'')+'</div>';
-        if(!qs.length){
-          return '<div class="bcard">'+header+'<div class="bhint">No grades taken yet \u2014 mark qualities on the Batches tab, then each one shows here for QC.</div></div>';
-        }
-        var qrows=qs.map(function(q){
-          var t=qcLatestBatchQ(b.no,q);
-          return '<div class="qcrow" data-qc-batch="'+esc(b.no)+'" data-qc-q="'+esc(q)+'" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 2px;border-top:1px solid var(--line);cursor:pointer">'+
-            '<div style="min-width:0"><span class="qchip q-'+esc(q)+'">'+esc(q)+'</span>'+
-              (t?'<div class="bhint" style="margin-top:4px">'+(t.tester?esc(t.tester)+' \u00b7 ':'')+fmtDate(t.ts)+(t.params&&t.params.length?' \u00b7 '+t.params.length+' readings':'')+(t.attachmentUrl?' \u00b7 report \u2713':(t.attachmentPending?' \u00b7 report \u2934':''))+(t.notes?' \u00b7 '+esc(t.notes):'')+'</div>':'<div class="bhint" style="margin-top:4px">Tap to log test results</div>')+
-            '</div>'+qcChip(t)+'</div>';
-        }).join("");
-        return '<div class="bcard">'+header+qrows+'</div>';
+        var s=qcBatchSummary(b);
+        var hint = s.allDone ? (s.anyHold?(s.hold+' grade'+(s.hold>1?'s':'')+' on hold'):'All grades passed')
+                             : (s.untested+' grade'+(s.untested>1?'s':'')+' awaiting test');
+        return '<div class="bcard" data-qc-batch="'+esc(b.no)+'" style="cursor:pointer">'+
+          '<div class="bhead"><div class="l"><span class="batchref" style="font-size:16px">'+esc(b.no)+'</span>'+
+            '<span class="formchip">'+esc(b.formulation||"")+'</span></div>'+qcBatchChip(s)+'</div>'+
+          qcGradeStrip(b)+
+          '<div class="bhint" style="margin-top:8px">'+hint+' · tap to log per-grade results</div>'+
+        '</div>';
       }).join("")+'</div>';
     }
     if(shifts.length){
@@ -1949,12 +1930,13 @@
 
   /* ---- QC test sheet (append-only; latest result is the current verdict) ---- */
   var QT=null;
-  function openQcBatch(no, quality){
-    quality=quality||"";
+  function openQcBatch(no){
     var b=null; for(var i=0;i<(state.batches||[]).length;i++) if(String(state.batches[i].no)===String(no)){ b=state.batches[i]; break; }
-    var prev=qcLatestBatchQ(no, quality);
-    QT={ kind:"batch", batchNo:no, quality:quality, label:"Batch "+no+(quality?" \u00b7 "+quality:""), sub:(b?b.formulation:"")||"",
-         params:(prev&&prev.params?JSON.parse(JSON.stringify(prev.params)):[]), verdict:(prev?prev.verdict:"pass"), tester:(prev?prev.tester:"")||"", notes:"",
+    var grades=qcGradesFor(b), verdicts={};
+    grades.forEach(function(g){ var t=qcLatestBatchQ(no,g); verdicts[g]= t? t.verdict : null; });   // null = untested
+    var prev=qcLatestBatch(no);   // newest of any grade, used to pre-fill shared readings/report
+    QT={ kind:"batch", batchNo:no, label:"Batch "+no, sub:(b?b.formulation:"")||"", grades:grades, verdicts:verdicts,
+         params:(prev&&prev.params?JSON.parse(JSON.stringify(prev.params)):[]), tester:(prev?prev.tester:"")||"", notes:"",
          attachmentUrl:(prev&&prev.attachmentUrl)||"", attachmentName:(prev&&prev.attachmentName)||"", newFileDataUrl:null, newFileName:"", newFileType:"" };
     renderQcSheet();
   }
@@ -1967,7 +1949,7 @@
     renderQcSheet();
   }
   function renderQcSheet(){
-    var prev = QT.kind==="batch" ? qcLatestBatchQ(QT.batchNo, QT.quality) : qcLatestCoarse(QT.shiftDate,QT.shift);
+    var prev = QT.kind==="batch" ? qcLatestBatch(QT.batchNo) : qcLatestCoarse(QT.shiftDate,QT.shift);
     var paramsHtml = QT.params.length ? QT.params.map(function(p,i){
       return '<div class="weighrow"><span><b>'+esc(p.name)+'</b> · '+esc(p.value)+(p.unit?' '+esc(p.unit):'')+'</span>'+
         '<button class="wdel" data-qp-del="'+i+'" aria-label="remove">\u2715</button></div>';
@@ -1981,19 +1963,33 @@
     } else if(QT.attachmentUrl){
       attachHtml='<div class="weighrow"><span>Report: <a href="'+esc(QT.attachmentUrl)+'" target="_blank" rel="noopener" style="color:var(--elec)">view</a> <small class="muted">'+esc(QT.attachmentName||"")+'</small></span></div>';
     }
+    var verdictBlock;
+    if(QT.kind==="batch"){
+      verdictBlock='<div class="sheet-label" style="margin-top:16px">Verdict per grade</div>'+
+        '<div class="hint" style="margin:-2px 0 9px">Mark each grade Pass (fit) or Hold (unfit). Leave a grade as \u201c\u2014\u201d until it\u2019s tested.</div>'+
+        QT.grades.map(function(g){
+          var v=QT.verdicts[g];
+          return '<div class="qgrow"><span class="qchip q-'+esc(g)+'" style="min-width:80px;text-align:center">'+esc(g)+'</span>'+
+            '<button class="gbtn none'+(v==null?' sel':'')+'" data-qcg="'+esc(g)+'" data-qcv="">\u2014</button>'+
+            '<button class="gbtn pass'+(v==="pass"?' sel':'')+'" data-qcg="'+esc(g)+'" data-qcv="pass">Pass</button>'+
+            '<button class="gbtn hold'+(v==="hold"?' sel':'')+'" data-qcg="'+esc(g)+'" data-qcv="hold">Hold</button></div>';
+        }).join("");
+    } else {
+      verdictBlock='<div class="sheet-label" style="margin-top:16px">Verdict</div>'+
+        '<div style="display:flex;gap:8px;margin-bottom:6px">'+
+          '<button class="pick'+(QT.verdict!=="hold"?' sel':'')+'" data-qc-verdict="pass" style="flex:1"><b>Pass</b><small>fit for dispatch</small></button>'+
+          '<button class="pick'+(QT.verdict==="hold"?' sel':'')+'" data-qc-verdict="hold" style="flex:1"><b>Hold</b><small>unfit \u2014 warn dispatch</small></button>'+
+        '</div>';
+    }
     openSheet('<div class="sheet-h"><span class="led" style="background:radial-gradient(circle at 35% 30%,#bfe3ff,#3aa0ff);box-shadow:0 0 10px 1px #3aa0ff"></span><b>'+esc(QT.label)+'</b></div>'+
-      '<div class="sheet-sub">'+(QT.sub?esc(QT.sub)+' · ':'')+'Log the lab results, then mark Pass or Hold.'+(prev?' Last: '+(prev.verdict==="hold"?'HOLD':'Passed')+' '+esc(fmtDate(prev.ts)):'')+'</div>'+
+      '<div class="sheet-sub">'+(QT.sub?esc(QT.sub)+' · ':'')+(QT.kind==="batch"?'Give a Pass / Hold per grade.':'Log the lab results, then mark Pass or Hold.')+(prev?' Last: '+(prev.verdict==="hold"?'HOLD':'Passed')+' '+esc(fmtDate(prev.ts)):'')+'</div>'+
       dl+
-      '<div class="sheet-label">Test readings</div>'+paramsHtml+
+      '<div class="sheet-label">Test readings <span class="muted" style="text-transform:none;letter-spacing:0">'+(QT.kind==="batch"?'— shared across grades, opt.':'opt.')+'</span></div>'+paramsHtml+
       '<div class="field-inline" style="align-items:stretch;margin-top:6px"><div class="field" style="margin-bottom:0;flex:1.3"><label>Parameter</label><input id="qp-name" list="qc-names" type="text" autocomplete="off" placeholder="e.g. Mooney viscosity"></div>'+
         '<div class="field" style="margin-bottom:0"><label>Value</label><input id="qp-val" type="text" inputmode="decimal" placeholder="0"></div>'+
         '<div class="field" style="margin-bottom:0;flex:.7"><label>Unit</label><input id="qp-unit" type="text" autocomplete="off" placeholder="opt."></div>'+
         '<button class="btn elec" id="qp-add" style="flex:0 0 auto;align-self:flex-end">+ Add</button></div>'+
-      '<div class="sheet-label" style="margin-top:16px">Verdict</div>'+
-      '<div style="display:flex;gap:8px;margin-bottom:6px">'+
-        '<button class="pick'+(QT.verdict!=="hold"?' sel':'')+'" data-qc-verdict="pass" style="flex:1"><b>Pass</b><small>fit for dispatch</small></button>'+
-        '<button class="pick'+(QT.verdict==="hold"?' sel':'')+'" data-qc-verdict="hold" style="flex:1"><b>Hold</b><small>unfit \u2014 warn dispatch</small></button>'+
-      '</div>'+
+      verdictBlock+
       '<div class="field-inline" style="margin-top:10px"><div class="field"><label>Tested by</label><input id="qc-tester" type="text" autocomplete="off" placeholder="QC name" value="'+esc(QT.tester||"")+'"></div></div>'+
       '<div class="field"><label>Notes <span class="muted" style="text-transform:none;letter-spacing:0">opt.</span></label><textarea id="qc-notes" rows="2" placeholder="observations / reason for hold">'+esc(QT.notes||"")+'</textarea></div>'+
       '<div class="sheet-label" style="margin-top:6px">Lab report <span class="muted" style="text-transform:none;letter-spacing:0">opt. \u2014 photo or PDF</span></div>'+
@@ -2002,17 +1998,19 @@
         '<input id="qc-file" type="file" accept="image/*,application/pdf" capture="environment" style="display:none"></label>'+
       '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button>'+
       '<button class="btn primary" id="qc-save">Save result</button></div>');
+    function grabShared(){ QT.tester=(sheet.querySelector("#qc-tester").value||"").trim(); QT.notes=sheet.querySelector("#qc-notes").value||""; }
     sheet.querySelector("#qp-add").addEventListener("click",function(){
       var nm=(sheet.querySelector("#qp-name").value||"").trim();
       var vl=(sheet.querySelector("#qp-val").value||"").trim();
       var un=(sheet.querySelector("#qp-unit").value||"").trim();
       if(!nm){ toast("Name the parameter","warn"); return; }
       if(vl===""){ toast("Enter the value","warn"); return; }
-      QT.tester=(sheet.querySelector("#qc-tester").value||"").trim(); QT.notes=sheet.querySelector("#qc-notes").value||"";
+      grabShared();
       QT.params.push({ name:nm, value:vl, unit:un }); renderQcSheet();
     });
-    sheet.querySelectorAll("[data-qp-del]").forEach(function(el){ el.addEventListener("click",function(){ QT.params.splice(parseInt(el.getAttribute("data-qp-del"),10),1); renderQcSheet(); }); });
-    sheet.querySelectorAll("[data-qc-verdict]").forEach(function(el){ el.addEventListener("click",function(){ QT.tester=(sheet.querySelector("#qc-tester").value||"").trim(); QT.notes=sheet.querySelector("#qc-notes").value||""; QT.verdict=el.getAttribute("data-qc-verdict"); renderQcSheet(); }); });
+    sheet.querySelectorAll("[data-qp-del]").forEach(function(el){ el.addEventListener("click",function(){ grabShared(); QT.params.splice(parseInt(el.getAttribute("data-qp-del"),10),1); renderQcSheet(); }); });
+    sheet.querySelectorAll("[data-qcg]").forEach(function(el){ el.addEventListener("click",function(){ grabShared(); var g=el.getAttribute("data-qcg"), v=el.getAttribute("data-qcv"); QT.verdicts[g]=(v===""?null:v); renderQcSheet(); }); });
+    sheet.querySelectorAll("[data-qc-verdict]").forEach(function(el){ el.addEventListener("click",function(){ grabShared(); QT.verdict=el.getAttribute("data-qc-verdict"); renderQcSheet(); }); });
     var fileIn=sheet.querySelector("#qc-file");
     if(fileIn) fileIn.addEventListener("change",function(ev){
       var f=ev.target.files&&ev.target.files[0]; if(!f) return;
@@ -2030,143 +2028,81 @@
   function commitQcTest(){
     QT.tester=(sheet.querySelector("#qc-tester").value||"").trim();
     QT.notes=sheet.querySelector("#qc-notes").value||"";
-    if(!QT.params.length && !QT.notes && !QT.newFileDataUrl && !QT.attachmentUrl){ toast("Add a reading, a note, or a report","warn"); return; }
-    var rec={ id:uid(), device:state.settings.device||"", ts:Date.now(), kind:QT.kind,
-      batchNo:(QT.kind==="batch"?QT.batchNo:null), quality:(QT.kind==="batch"?(QT.quality||""):null), shiftDate:(QT.kind==="coarse"?QT.shiftDate:null), shift:(QT.kind==="coarse"?QT.shift:null),
-      params:QT.params.slice(), verdict:(QT.verdict==="hold"?"hold":"pass"), tester:QT.tester, notes:QT.notes,
-      attachmentUrl:"", attachmentName:"", synced:false };
+    var ts=Date.now(), dev=state.settings.device||"";
     var newFile=QT.newFileDataUrl, newName=QT.newFileName||"report";
-    // keep an existing report if no new file was chosen
-    if(!newFile && QT.attachmentUrl){ rec.attachmentUrl=QT.attachmentUrl; rec.attachmentName=QT.attachmentName||""; }
-    var held=(rec.verdict==="hold");
+    var keepUrl=(!newFile && QT.attachmentUrl)?QT.attachmentUrl:"";
+    var keepName=(!newFile && QT.attachmentUrl)?(QT.attachmentName||""):"";
+    var recs=[];
+    if(QT.kind==="batch"){
+      var chosen=QT.grades.filter(function(g){ return QT.verdicts[g]==="pass"||QT.verdicts[g]==="hold"; });
+      if(!chosen.length){ toast("Set Pass or Hold on at least one grade","warn"); return; }
+      chosen.forEach(function(g){
+        recs.push({ id:uid(), device:dev, ts:ts, kind:"batch", batchNo:QT.batchNo, quality:g,
+          shiftDate:null, shift:null, params:QT.params.slice(), verdict:QT.verdicts[g],
+          tester:QT.tester, notes:QT.notes, attachmentUrl:keepUrl, attachmentName:keepName, synced:false });
+      });
+    } else {
+      if(!QT.params.length && !QT.notes && !newFile && !QT.attachmentUrl){ toast("Add a reading, a note, or a report","warn"); return; }
+      recs.push({ id:uid(), device:dev, ts:ts, kind:"coarse", batchNo:null, quality:"Coarse",
+        shiftDate:QT.shiftDate, shift:QT.shift, params:QT.params.slice(), verdict:(QT.verdict==="hold"?"hold":"pass"),
+        tester:QT.tester, notes:QT.notes, attachmentUrl:keepUrl, attachmentName:keepName, synced:false });
+    }
+    var anyHold=recs.some(function(r){ return r.verdict==="hold"; });
+    recs.forEach(function(r){ state.qualityTests.push(r); });
+    QT=null; save(); closeSheet(); render();
     if(newFile){
-      rec.attachmentName=newName; rec.attachmentPending=true;
+      recs.forEach(function(r){ r.attachmentName=newName; r.attachmentPending=true; });
+      var keyId=recs[0].id;
       var online=(syncTarget()==="supabase") && (typeof navigator==="undefined" || navigator.onLine!==false);
-      state.qualityTests.push(rec); QT=null; save(); closeSheet(); render();
       if(online){
-        toast(held?"Marked HOLD \u00b7 uploading report\u2026":"Saved \u00b7 uploading report\u2026","ok");
-        uploadDataUrl(rec.id, rec.attachmentName, newFile).then(function(url){
-          rec.attachmentUrl=url; rec.attachmentPending=false; rec.synced=false; save(); if(!sheetIsOpen()) render();
-        }).catch(function(){ if(!qcEnqueueUpload(rec.id, rec.attachmentName, newFile)) toast("Report too large to queue","warn"); });
+        toast(anyHold?"Saved \u00b7 uploading report\u2026":"Saved \u00b7 uploading report\u2026","ok");
+        uploadDataUrl(keyId, newName, newFile).then(function(url){
+          recs.forEach(function(r){ r.attachmentUrl=url; r.attachmentName=newName; r.attachmentPending=false; r.synced=false; });
+          save(); if(!sheetIsOpen()) render();
+        }).catch(function(){ if(!qcEnqueueUpload(keyId, newName, newFile)) toast("Report too large to queue","warn"); });
         scheduleAutoSync(700);
       } else {
-        var ok=qcEnqueueUpload(rec.id, rec.attachmentName, newFile);
+        var ok=qcEnqueueUpload(keyId, newName, newFile);
         toast(ok?"Saved \u2014 report uploads when online":"Saved \u2014 report too big to queue offline","warn");
       }
       return;
     }
-    state.qualityTests.push(rec); QT=null;
-    save(); closeSheet(); render();
-    toast(held?"Marked HOLD \u2014 dispatch will be warned":"Result saved \u00b7 passed","ok");
+    var msg = (recs.length>1)
+      ? (recs.length+" grade verdicts saved"+(anyHold?" \u00b7 some on HOLD":""))
+      : (anyHold?"Marked HOLD \u2014 dispatch will be warned":"Result saved \u00b7 passed");
+    toast(msg,"ok");
     scheduleAutoSync(500);
   }
 
-
-  function hvInit(){
-    if(HV) return;
-    var c=curShift(), date=c.date||"", shift=c.name||"Day";
-    if(!date && state.runs.length){          // fall back to the most recent run's shift
-      var lr=null; state.runs.forEach(function(r){ if(!lr || (r.end||r.start||0)>(lr.end||lr.start||0)) lr=r; });
-      if(lr){ date=lr.shiftDate||date; shift=lr.shift||shift; }
-    }
-    HV={ date:date, shift:shift, machine:null };
-  }
   function viewHistory(){
-    hvInit();
-    var clock='<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 4v4h4"/>';
-    var head='<div class="view-head"><h1>History</h1><div class="meta">Audit logged runs — pick the day &amp; shift, then a machine</div></div>';
-    var controls='<div class="hvctl">'
-      +'<div class="hvfield"><label>Day</label><input type="date" id="hv-date" value="'+esc(HV.date)+'"></div>'
-      +'<div class="hvseg"><button data-hv-shift="Day" class="'+(HV.shift==="Day"?"on":"")+'">Day</button>'
-        +'<button data-hv-shift="Night" class="'+(HV.shift==="Night"?"on":"")+'">Night</button></div>'
-      +'</div>';
-
-    if(!HV.date){
-      return head+controls+empty(clock,"Pick a production day","Choose the day and shift to review every run logged for it. Tap any run to correct it.");
-    }
-
-    var runs=(state.runs||[]).filter(function(r){ return (r.shiftDate||"")===HV.date && (r.shift||"")===HV.shift; });
-
-    if(HV.machine) return head+controls+hvMachineDetail(runs);
-
-    // counts per machine
-    var byM={}, miss={}, total=0, totalMiss=0, sset={};
-    runs.forEach(function(r){ var id=r.machineId||"?"; byM[id]=(byM[id]||0)+1; total++;
-      if(!r.supervisor){ miss[id]=(miss[id]||0)+1; totalMiss++; } else sset[String(r.supervisor).trim()]=1; });
-
-    var summary='<div class="statgrid" style="grid-template-columns:repeat(3,1fr);margin-bottom:6px">'
-      +stat(total,"","runs")+stat(totalMiss,"","no supervisor")+stat(Object.keys(sset).length,"","supervisors")+'</div>';
-    var supLine=Object.keys(sset).length?'<div class="muted" style="margin:2px 2px 8px;font-size:12.5px;font-family:var(--mono)">on shift: '+esc(Object.keys(sset).join(" · "))+'</div>':'';
-    var banner = total ? '' : '<div class="hint" style="margin:6px 2px 12px;color:var(--amber)">No runs logged for '+esc(fmtDay(HV.date))+' · '+esc(HV.shift)+'.</div>';
-
-    // groups (machine roster order) + any unknown machine ids that have runs
-    var groups=[], seen={}, known={};
-    MACHINES.forEach(function(m){ known[m.id]=1; var g=m.group||"Machines"; if(!seen[g]){ seen[g]=[]; groups.push(g); } seen[g].push(m); });
-    Object.keys(byM).forEach(function(id){ if(!known[id]){ if(!seen["Other"]){ seen["Other"]=[]; groups.push("Other"); } seen["Other"].push({id:id,name:id,short:id,kind:"other",group:"Other"}); } });
-
-    var grid=groups.map(function(g){
-      var tiles=seen[g].map(function(m){
-        var n=byM[m.id]||0, ms=miss[m.id]||0;
-        return '<button class="htile'+(n?"":" idle")+(ms?" hot":"")+'" data-hv-machine="'+esc(m.id)+'">'
-          +(ms?'<span class="htag">⚠ '+ms+'</span>':'')
-          +'<div class="hn">'+esc(m.name||m.short||m.id)+'</div><div class="hk">'+esc(m.kind||"")+'</div>'
-          +'<div class="hc"><b class="tnum">'+n+'</b>run'+(n===1?"":"s")+'</div></button>';
-      }).join("");
-      return '<div class="hsec"><b>'+esc(g)+'</b><span class="ln"></span></div><div class="hgrid">'+tiles+'</div>';
+    if(!state.runs.length) return '<div class="view-head"><h1>History</h1></div>'+
+      empty('<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 4v4h4"/>',"No runs logged","Captured runs from every machine show up here.");
+    var rows=state.runs.slice().reverse();
+    var body=rows.map(function(r){
+      var isShift = !!r.shift;
+      var ep=[];
+      if(r.kWh!==""&&r.kWh!=null) ep.push(esc(r.kWh)+' kWh');
+      if(r.firewoodKg!==""&&r.firewoodKg!=null) ep.push(esc(r.firewoodKg)+' kg');
+      var energy = ep.length ? ep.join(' · ') : '—';
+      var when = isShift ? (esc(fmtDay(r.shiftDate))+' '+esc(r.shift)) : fmtDate(r.end);
+      var col2 = isShift ? '<span class="qchip shift"'+(r.line==="coarse"?' style="background:var(--ember)"':'')+'>'+esc(r.shift)+'</span>'+(r.formulation?'<br><span class="muted" style="font-size:10px">'+esc(r.formulation)+'</span>':'')
+                      : '<span class="batchref" style="font-size:12px">'+esc(r.batchNo)+'</span>'+(r.quality?'<br>'+qchip(r.quality):'');
+      var wt = (r.weightKg!==""&&r.weightKg!=null) ? esc(r.weightKg)+' kg' : (r.machineId==="R4" ? '<span class="muted">pending</span>' : '—');
+      var mlabel = r.short || shortName(r.machineId);
+      var sup = r.supervisor ? esc(r.supervisor) : '<span class="muted">—</span>';
+      return '<tr class="hrow" data-edit-run="'+esc(r.id)+'" style="cursor:pointer"><td><span class="synced '+(r.synced?"yes":"")+'"></span></td>'+
+        '<td><b>'+esc(mlabel)+'</b>'+((r.passes||1)>1?' <span class="muted" style="font-size:10px">×'+r.passes+'</span>':'')+'<br><span class="muted" style="font-size:11px">'+when+'</span></td>'+
+        '<td>'+col2+'</td>'+
+        '<td>'+sup+'</td>'+
+        '<td class="tnum">'+fmtDur(r.runtimeMin)+'</td>'+
+        '<td class="tnum">'+energy+'</td>'+
+        '<td class="tnum">'+(r.workers!==""?esc(r.workers):'—')+'</td>'+
+        '<td class="tnum">'+wt+'</td></tr>';
     }).join("");
-
-    var csv='<div style="margin-top:18px"><button class="btn ghost block" data-act="export">Export CSV backup</button></div>';
-    return head+controls+summary+supLine+banner+grid+csv;
-  }
-
-  function hvMachineDetail(allRuns){
-    var mid=HV.machine, mm=M(mid);
-    var name=(mm&&mm.name)||shortName(mid)||mid;
-    var runs=allRuns.filter(function(r){ return (r.machineId||"?")===mid; });
-    var back='<button class="hvback" data-hv-back="1">\u2039 All machines</button>';
-    var dethead='<div class="hvdethead"><h2>'+esc(name)+'</h2><span class="muted">'+esc(fmtDay(HV.date))+' · '+esc(HV.shift)+' · '+runs.length+' run'+(runs.length===1?"":"s")+'</span></div>';
-    if(!runs.length) return back+dethead+empty('<path d="M9 11l3 3 8-8"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',"No runs on this machine","Nothing was logged on "+esc(name)+" for this shift.");
-    runs.sort(function(a,b){ return (a.end||a.start||0)-(b.end||b.start||0); });
-    return back+dethead+'<div class="stack">'+runs.map(hvRunCard).join("")+'</div>';
-  }
-
-  function hvRunCard(r){
-    var sw=(r.line==="grind"||r.line==="coarse");
-    var miss=!r.supervisor;
-    var when=r.end?fmtDate(r.end):(r.shiftDate?fmtDay(r.shiftDate):"");
-    var chips=[];
-    if(r.batchNo) chips.push('<span class="batchref" style="font-size:13px">'+esc(r.batchNo)+'</span>');
-    if(r.quality) chips.push(qchip(r.quality));
-    if(sw) chips.push('<span class="qchip shift"'+(r.line==="coarse"?' style="background:var(--ember)"':'')+'>'+esc(r.shift)+'</span>');
-    if(r.formulation) chips.push('<span class="formchip">'+esc(r.formulation)+'</span>');
-    if(r.tyreType && TYRES[r.tyreType]) chips.push('<span class="formchip" style="color:var(--steel)">'+esc(TYRES[r.tyreType].mesh)+'</span>');
-    if((r.passes||1)>1) chips.push('<span class="formchip">×'+esc(r.passes)+'</span>');
-    if(miss) chips.push('<span class="hvmiss">no supervisor</span>');
-    var facts=[];
-    if(r.runtimeMin!=null&&r.runtimeMin!=="") facts.push(fmtDur(r.runtimeMin));
-    if(r.kWh!==""&&r.kWh!=null) facts.push(esc(r.kWh)+' kWh');
-    if(r.firewoodKg!==""&&r.firewoodKg!=null) facts.push(esc(r.firewoodKg)+' kg fw');
-    if(r.weightKg!==""&&r.weightKg!=null) facts.push(esc(r.weightKg)+' kg out');
-    if(r.workers!==""&&r.workers!=null) facts.push(esc(r.workers)+' crew');
-    var sup=r.supervisor?('\uD83D\uDC64 '+esc(r.supervisor)):'<span style="color:var(--amber)">no supervisor</span>';
-    // autoclave loadings — batch number + load/unload time per loading, for the logbook audit
-    var acBlock="";
-    if(r.kind==="autoclave"){
-      var loads=(r.loadings&&r.loadings.length)?r.loadings:[{ batchNo:r.batchNo||"", loadedAt:r.loadedAt, unloadedAt:r.unloadedAt }];
-      var rows=loads.map(function(L){
-        var bt=L.batchNo?('<span class="batchref" style="font-size:12.5px">'+esc(L.batchNo)+'</span>'):'<span class="muted">no batch</span>';
-        var lt=L.loadedAt!=null?fmtClock(L.loadedAt):"—", ut=L.unloadedAt!=null?fmtClock(L.unloadedAt):"—";
-        return '<div class="acload">'+bt+'<span class="muted">load '+lt+' \u2192 unload '+ut+'</span></div>';
-      }).join("");
-      acBlock='<div class="acloads">'+rows+'</div>';
-    }
-    return '<div class="bcard" data-edit-run="'+esc(r.id)+'" style="cursor:pointer">'
-      +'<div class="bhead"><div class="l" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">'+chips.join(" ")+'</div>'
-        +'<span class="muted" style="font-size:11px">'+esc(when)+(r.synced?'':' · not synced')+'</span></div>'
-      +'<div class="bhint" style="margin-top:9px">'+(facts.length?facts.join(" · "):"—")+'</div>'
-      +acBlock
-      +'<div class="bhint" style="margin-top:4px">'+sup+' · tap to edit</div>'
-      +'</div>';
+    var u=unsynced().length;
+    return '<div class="view-head"><h1>History</h1><div class="meta">'+state.runs.length+' rows · '+u+' unsynced · tap a row to edit</div></div>'+
+      '<div class="panel scroll-x"><table class="hist"><thead><tr><th></th><th>Machine</th><th>Batch</th><th>Super</th><th>Run</th><th>Energy</th><th>Crew</th><th>Weight</th></tr></thead><tbody>'+body+'</tbody></table></div>'+
+      '<div style="margin-top:12px"><button class="btn ghost block" data-act="export">Export CSV backup</button></div>';
   }
 
   /* ---- Editable history: tap a row to correct or delete an entry ---- */
@@ -2188,7 +2124,6 @@
         '<div class="field"><label>Shift</label><select id="e-shift"><option value="Day"'+(r.shift==="Day"?" selected":"")+'>Day</option><option value="Night"'+(r.shift==="Night"?" selected":"")+'>Night</option></select></div>'+
         '<div class="field"><label>Shift date</label><input id="e-sdate" type="date" value="'+esc(r.shiftDate||"")+'"></div></div>';
     }
-    rows+='<div class="field"><label>Supervisor</label><input id="e-sup" type="text" autocomplete="off" placeholder="name" value="'+esc(r.supervisor==null?"":r.supervisor)+'"></div>';
     rows+='<div class="field-inline">'+
       '<div class="field"><label>Run time (min)</label><input id="e-rt" type="number" inputmode="decimal" value="'+esc(r.runtimeMin==null?"":r.runtimeMin)+'"></div>'+
       '<div class="field"><label>Workers</label><input id="e-wk" type="number" inputmode="numeric" value="'+esc(r.workers==null?"":r.workers)+'"></div></div>';
@@ -2205,12 +2140,6 @@
       '<button class="btn primary" id="e-save">Save changes</button></div>'+
       '<button class="btn danger block" id="e-del" style="margin-top:10px">Delete this entry</button>');
     sheet.querySelector("#e-save").addEventListener("click",function(){
-      // guard against negative readings/values
-      var vRt=sheet.querySelector("#e-rt"), vKwh=sheet.querySelector("#e-kwh"), vFw=sheet.querySelector("#e-fw"), vWt=sheet.querySelector("#e-wt");
-      if(vRt && vRt.value!=="" && num(vRt.value)<0){ toast("Run time can't be negative","err"); return; }
-      if(vKwh && vKwh.value!=="" && num(vKwh.value)<0){ toast("Energy (kWh) can't be negative","err"); return; }
-      if(vFw && vFw.value!=="" && num(vFw.value)<0){ toast("Firewood can't be negative","err"); return; }
-      if(vWt && vWt.value!=="" && num(vWt.value)<0){ toast("Weight can't be negative","err"); return; }
       if(!isShift){
         var eb=sheet.querySelector("#e-batch"); if(eb) r.batchNo=(eb.value||"").trim();
         var eq=sheet.querySelector("#e-qual"); if(eq) r.quality=eq.value||"";
@@ -2220,7 +2149,6 @@
       }
       var ert=sheet.querySelector("#e-rt"); if(ert) r.runtimeMin=num(ert.value);
       var ewk=sheet.querySelector("#e-wk"); if(ewk) r.workers=num(ewk.value);
-      var esup=sheet.querySelector("#e-sup"); if(esup) r.supervisor=(esup.value||"").trim();
       var efw=sheet.querySelector("#e-fw"); if(efw) r.firewoodKg=num(efw.value);
       var ekwh=sheet.querySelector("#e-kwh"); if(ekwh) r.kWh=num(ekwh.value);
       var ewt=sheet.querySelector("#e-wt"); if(ewt) r.weightKg=num(ewt.value);
@@ -2235,12 +2163,9 @@
     var r=findRun(id); if(!r){ closeSheet(); return; }
     var mlabel=r.short||shortName(r.machineId)||r.machine||"";
     var whenTxt=r.shift?(fmtDay(r.shiftDate)+' · '+r.shift):fmtDate(r.end);
-    var m=M(r.machineId);
-    var crumbNote=(m && m.crumb && r.crumbAdded>0 && r.tyreType)
-      ? '<div class="hint" style="margin-top:6px">'+Math.round(r.crumbAdded*100)/100+' kg of '+esc(TYRES[r.tyreType].label)+' crumb added by this entry will be removed from stock.</div>' : '';
     openSheet('<div class="sheet-h"><b>Delete this entry?</b></div>'+
       '<div class="sheet-sub"><span class="batchref">'+esc(mlabel)+'</span> · '+esc(whenTxt)+'</div>'+
-      '<div class="hint">Permanently removes this entry'+(r.synced?' from this device and the database':'')+'. This cannot be undone.</div>'+crumbNote+
+      '<div class="hint">Permanently removes this entry'+(r.synced?' from this device and the database':'')+'. This cannot be undone.</div>'+
       '<div class="sheet-actions"><button class="btn ghost" data-act="close">Keep entry</button>'+
       '<button class="btn danger" id="del-go">Yes, delete</button></div>');
     sheet.querySelector("#del-go").addEventListener("click",function(){ deleteRun(id); });
@@ -2249,9 +2174,6 @@
     var idx=-1, r=null;
     for(var i=0;i<state.runs.length;i++){ if(state.runs[i].id===id){ r=state.runs[i]; idx=i; break; } }
     if(idx<0){ closeSheet(); return; }
-    var m=M(r.machineId);
-    // if this grinder entry had live-weighed crumb into stock, pull it back out
-    if(m && m.crumb && r.crumbAdded>0 && r.tyreType) takeCrumb(TYRES[r.tyreType].store, r.crumbAdded);
     var wasSynced=!!r.synced;
     state.runs.splice(idx,1);
     if(wasSynced && syncTarget()==="supabase"){
@@ -2263,161 +2185,31 @@
     if(wasSynced) scheduleAutoSync(400);
   }
 
-  /* ===================== bearing / bush temperature log ===================== */
-  // One "event" = all positions logged for a machine at the same reading time.
-  function bearingEvents(){
-    var map={};
-    (state.bearingLogs||[]).forEach(function(x){
-      var key=x.machineId+"|"+x.ts;
-      if(!map[key]) map[key]={ machineId:x.machineId, machine:x.machine||shortName(x.machineId), ts:x.ts, tsMs:+new Date(x.ts),
-        bearingType:x.bearingType||"bearing", supervisor:x.supervisor||"", shift:x.shift||"", shiftDate:x.shiftDate||"",
-        loggedAt:(x.loggedAt!=null?+new Date(x.loggedAt):null), temps:[] };
-      map[key].temps.push({ pos:x.position, v:x.tempC });
-    });
-    var arr=Object.keys(map).map(function(k){ return map[k]; });
-    // compute the gap since the previous reading on the same machine
-    var byMach={};
-    arr.forEach(function(ev){ (byMach[ev.machineId]=byMach[ev.machineId]||[]).push(ev); });
-    Object.keys(byMach).forEach(function(mid){
-      var list=byMach[mid].sort(function(a,b){ return a.tsMs-b.tsMs; });
-      list.forEach(function(ev,i){ ev.gapMin = i>0 ? Math.round((ev.tsMs-list[i-1].tsMs)/60000) : null; });
-    });
-    return arr.sort(function(a,b){ return b.tsMs-a.tsMs; });
-  }
-  function bearingGapBad(ev){
-    var m=M(ev.machineId), spec=m?bearingSpec(m):null;
-    if(!spec || ev.gapMin==null) return false;
-    return ev.gapMin > spec.intervalH*60*1.5;            // > 1.5x the expected interval = likely a missed reading
-  }
-  function viewBearings(){
-    var monitored=MACHINES.filter(function(m){ return !!bearingSpec(m); });
-    var due=dueMachines();
-    var events=bearingEvents();
-    var lateCount=events.filter(function(e){ return e.loggedAt!=null; }).length;
-    var gapCount=events.filter(bearingGapBad).length;
-    var head='<div class="view-head"><h1>Bearings</h1><div class="meta">'+(state.bearingLogs||[]).length+' readings · '+due.length+' due now</div></div>';
-
-    var stats='<div class="statgrid" style="margin-bottom:14px">'+
-      stat(events.length,"","logged")+
-      stat(due.length,"","due now")+
-      stat(lateCount,"","back-dated")+
-      stat(gapCount,"","gaps")+'</div>';
-
-    // live status of every monitored machine that is currently running
-    var liveCards=monitored.map(function(m){
-      var st=state.machines[m.id], spec=bearingSpec(m), label=spec.type==="bush"?"Bush":"Bearing";
-      var running=!!(st&&st.running&&!st.running.paused&&!st.down);
-      if(!running) return "";
-      var last=lastBearingLog(m.id), isDue=bearingDue(m);
-      var sub = last!=null ? ('last '+fmtAgo(last)) : 'not logged yet';
-      var right = isDue
-        ? '<span class="bstate cook" style="background:var(--amber);color:#1a1407">⚠ Log now</span>'
-        : '<span class="bstate ready" style="background:none;color:var(--ok)">on schedule</span>';
-      return '<div class="bcard"'+(isDue?' style="border:1px solid var(--amber)"':'')+'>'+
-        '<div class="bhead"><div class="l"><span class="batchref" style="font-size:15px">'+esc(m.short)+'</span>'+
-          '<span class="formchip">'+label+' · every '+spec.intervalH+'h</span></div>'+right+'</div>'+
-        '<div class="bhint">'+esc(m.name)+' · '+sub+'</div>'+
-        '<button class="btn '+(isDue?'primary':'ghost')+' block" data-bearings="'+m.id+'" style="margin-top:8px">Log temperatures</button></div>';
-    }).filter(Boolean).join("");
-    var liveSection = liveCards
-      ? '<div class="sheet-label" style="margin:4px 2px 8px">Running now</div><div class="stack">'+liveCards+'</div>'
-      : '<div class="hint" style="margin:2px 2px 12px">No monitored machine is running right now. Readings are due every 2–3 hours while a refiner, grinder or cracker is running.</div>';
-
-    if(!events.length)
-      return head+stats+liveSection+empty('<path d="M14 14.76V3.5a2.5 2.5 0 0 0-5 0v11.26a4.5 4.5 0 1 0 5 0Z"/>',
-        "No temperatures logged yet","When a supervisor records bearing or bush temps, every reading lands here with its time and who logged it.");
-
-    var rows=events.map(function(ev){
-      var m=M(ev.machineId), spec=m?bearingSpec(m):null, label=(ev.bearingType==="bush")?"Bush":"Bearing";
-      var temps=ev.temps.slice().sort(function(a,b){ return (a.pos>b.pos?1:-1); }).map(function(t){
-        return '<span class="formchip" style="font-family:var(--mono)">'+esc(t.pos)+': '+(t.v==null?'—':esc(t.v)+'°')+'</span>';
-      }).join(" ");
-      var lateTag = ev.loggedAt!=null ? ' <span class="qchip" style="background:var(--steel);color:#0e1a08;font-size:9px">entered '+esc(fmtDur(Math.round((ev.loggedAt-ev.tsMs)/60000)))+' late</span>' : '';
-      var gapBad=bearingGapBad(ev);
-      var gapLine = ev.gapMin!=null
-        ? '<div class="bhint"'+(gapBad?' style="color:var(--amber)"':'')+'>'+(gapBad?'⚠ ':'')+fmtDur(ev.gapMin)+' since previous reading'+(gapBad?' — a reading may have been missed':'')+'</div>'
-        : '';
-      var who = ev.supervisor ? '👤 '+esc(ev.supervisor) : '<span class="muted">no supervisor</span>';
-      return '<div class="bcard"'+(gapBad?' style="border-left:3px solid var(--amber)"':'')+'>'+
-        '<div class="bhead"><div class="l"><span class="batchref" style="font-size:15px">'+esc(ev.machine||shortName(ev.machineId))+'</span>'+
-          '<span class="formchip">'+label+'</span>'+(ev.shift?'<span class="qchip shift" style="font-size:9px">'+esc(ev.shift)+'</span>':'')+'</div>'+
-          '<span class="muted" style="font-size:11px">'+esc(fmtDate(ev.tsMs))+lateTag+'</span></div>'+
-        '<div style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0">'+temps+'</div>'+
-        '<div class="bhint">'+who+(ev.shiftDate?' · '+esc(fmtDay(ev.shiftDate)):'')+'</div>'+
-        gapLine+'</div>';
-    }).join("");
-
-    return head+stats+liveSection+
-      '<div class="sheet-label" style="margin:16px 2px 8px">Log history</div><div class="stack">'+rows+'</div>';
-  }
-
-  function viewReports(){
-    var runs=state.runs;
-    var totKwh=0,totFw=0,totMin=0,wh=0;
-    runs.forEach(function(r){
-      if(r.kWh!=="") totKwh+=parseFloat(r.kWh)||0;
-      if(r.firewoodKg!=="") totFw+=parseFloat(r.firewoodKg)||0;
-      if(r.runtimeMin) totMin+=r.runtimeMin;
-      if(r.workers!==""&&r.runtimeMin) wh+=(parseFloat(r.workers)||0)*(r.runtimeMin/60);
-    });
-    var byQ={}; QUALITIES.forEach(function(q){ byQ[q]=0; });
-    var ground=0, coarse=0;
-    runs.forEach(function(r){
-      if(r.machineId==="R4"&&r.weightKg!==""&&r.weightKg!=null) byQ[r.quality]=(byQ[r.quality]||0)+(parseFloat(r.weightKg)||0);
-      if(r.line==="grind"&&r.weightKg!==""&&r.weightKg!=null) ground+=parseFloat(r.weightKg)||0;
-      if(r.line==="coarse"&&r.weightKg!==""&&r.weightKg!=null) coarse+=parseFloat(r.weightKg)||0;
-    });
-    var maxQ=Math.max(1,byQ.Special,byQ.SuperFine,byQ.Fine,byQ.Medium);
-    var totW=byQ.Special+byQ.SuperFine+byQ.Fine+byQ.Medium;
-    var maint=(state.maintenance||[]); var downMin=0; maint.forEach(function(x){ downMin+=parseFloat(x.downtimeMin)||0; });
-
-    var stats='<div class="statgrid">'+
-      stat(crumbAvail("truck"),"kg","Truck crumb · 30#")+
-      stat(crumbAvail("bike"),"kg","Bike crumb · 20#")+
-      stat(state.batches.length,"","Batches")+
-      stat(runs.length,"","Runs logged")+
-      stat(Math.round(totMin/60*10)/10,"h","Machine hours")+
-      stat(Math.round(wh*10)/10,"h","Worker-hours")+
-      stat(Math.round(totKwh*10)/10,"kWh","Electricity")+
-      stat(Math.round(totFw),"kg","Firewood")+
-      stat(Math.round(totW*10)/10,"kg","Refined output")+
-      stat(Math.round(ground*10)/10,"kg","Crumb produced")+
-      stat(Math.round(coarse*10)/10,"kg","Coarse output")+
-      stat(state.dispatches?state.dispatches.length:0,"","Dispatches")+
-      stat(maint.length,"","Breakdowns")+
-      stat(Math.round(downMin),"min","Downtime")+
+  function viewBearing(){
+    var machines=MACHINES.filter(function(m){ return bearingSpec(m); });
+    var head='<div class="view-head"><h1>Bearing log</h1><div class="meta">'+dueMachines().length+' due now</div></div>';
+    var intro='<div class="hint" style="margin:0 2px 12px">Grinders & crackers: log every 2 hours. Refiners: every 3 hours. Missed intervals are flagged. Use the late-time option if a reading was taken earlier.</div>';
+    var cards=machines.map(function(m){
+      var s=bearingStatus(m); if(!s) return "";
+      var statCls = s.state==="ok"?"ok":(s.state==="due"?"due":(s.state==="miss"?"miss":"idle"));
+      var statTxt = s.state==="ok"?"On schedule":(s.state==="due"?"Due now":(s.state==="miss"?("Missed ×"+s.missed):"Idle"));
+      var sub = (s.spec.type==="bush"?"Bush":"Bearing")+' · every '+s.spec.intervalH+' h · '+esc(s.note);
+      var overdueLine = (s.state==="due"||s.state==="miss") ? '<div class="bhint" style="color:var(--amber);margin-top:6px">⚠ Overdue by '+fmtDur(s.overdueMin)+(s.missed>1?' · '+s.missed+' intervals missed':'')+'</div>' : '';
+      var evs=bearingEvents(m.id,4);
+      var rows = evs.length ? evs.map(function(e){
+        var temps=["1","2","3","4"].map(function(p){ return e.temps[p]!=null?e.temps[p]+"°":"—"; }).join(" / ");
+        return '<div class="brow"><span class="bt">'+temps+'</span><span style="color:var(--ink-dim);font-size:11px">'+(e.supervisor?'👤 '+esc(e.supervisor)+' · ':'')+fmtDate(e.recordedAt)+'</span></div>';
+      }).join("") : '<div class="bhint" style="margin-top:6px">No readings logged yet.</div>';
+      return '<div class="bcard">'+
+        '<div class="bhead"><div class="l"><span class="batchref" style="font-size:15px">'+esc(m.name)+'</span></div>'+
+          '<span class="bstat '+statCls+'">'+statTxt+'</span></div>'+
+        '<div class="bhint" style="margin-top:2px">'+sub+'</div>'+overdueLine+rows+
+        '<button class="btn primary block" data-bearings="'+m.id+'" style="margin-top:10px">Log temperatures ▸</button>'+
       '</div>';
-
-    var wq=QUALITIES.map(function(q){
-      var v=byQ[q]||0, pct=Math.round(v/maxQ*100);
-      return '<div class="wq"><span class="qchip q-'+q+'" style="min-width:74px;text-align:center">'+q+'</span>'+
-        '<span class="wbar"><i style="width:'+pct+'%;background:var(--q-'+q.toLowerCase()+')"></i></span>'+
-        '<span class="val tnum">'+(Math.round(v*10)/10)+' kg</span></div>';
     }).join("");
-
-    var shiftMap={};
-    runs.forEach(function(r){ if(!r.shiftDate||!r.shift) return; shiftMap[r.shiftDate+"|"+r.shift]=1; });
-    var shiftKeys=Object.keys(shiftMap).sort().reverse();
-    var shiftRows=shiftKeys.map(function(k){ var a=shiftAgg(k);
-      return '<button class="shiftrow" data-shiftreport="'+k+'"><div class="sr-l"><b>'+esc(a.shift)+'</b> · '+esc(fmtDay(a.date))+'</div>'+
-        '<div class="sr-r"><span class="am">'+Math.round(a.reclaim)+' kg</span><span>'+Math.round(a.crumb)+' kg crumb</span><span class="el">'+Math.round(a.kwh)+' kWh</span><span style="opacity:.5">›</span></div></button>';
-    }).join("");
-    var shiftPanel = shiftKeys.length ? '<div class="panel" style="margin-top:14px"><div class="sheet-label" style="margin:0 0 8px">Production by shift <span class="muted" style="text-transform:none;letter-spacing:0">— tap for the full breakdown</span></div>'+shiftRows+'</div>' : '';
-
-    var maintRows=maint.slice().reverse().slice(0,6).map(function(x){
-      return '<div class="mlog"><div class="mlog-h"><b>'+esc(x.machine)+'</b><span class="muted">'+Math.round(x.downtimeMin)+' min · '+fmtClock(x.repairedAt)+'</span></div>'+
-        '<div class="mlog-b"><b>Cause:</b> '+esc(x.rootCause)+'<br><b>Fix:</b> '+esc(x.resolution)+'<br><b>Prevent:</b> '+esc(x.prevention)+'</div></div>';
-    }).join("");
-    var maintPanel = maint.length ? '<div class="panel" style="margin-top:14px"><div class="sheet-label" style="margin:0 0 8px">Maintenance log · '+Math.round(downMin)+' min total downtime</div>'+maintRows+'</div>' : '';
-
-    return '<div class="view-head"><h1>Reports</h1><div class="meta">live totals</div></div>'+
-      stats+shiftPanel+
-      '<div class="panel" style="margin-top:14px"><div class="sheet-label" style="margin:0 0 6px">Weighed output by quality</div>'+wq+
-      '<div class="wq" style="border-top:1px solid var(--line);margin-top:4px"><span style="min-width:74px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);font-weight:700">Total</span>'+
-      '<span class="wbar" style="background:none"></span><span class="val tnum" style="color:var(--amber)">'+(Math.round(totW*10)/10)+' kg</span></div></div>'+
-      maintPanel;
+    return head+intro+'<div class="stack">'+cards+'</div>';
   }
-  function stat(v,unit,k){ return '<div class="stat"><div class="v tnum">'+v+(unit?'<small>'+unit+'</small>':'')+'</div><div class="k">'+k+'</div></div>'; }
+
   function empty(icon,big,sub){ return '<div class="empty"><svg viewBox="0 0 24 24">'+icon+'</svg><div class="big">'+esc(big)+'</div><div>'+esc(sub)+'</div></div>'; }
 
   function viewSettings(){
@@ -2460,7 +2252,7 @@
       '<button class="btn ghost" data-act="export">Export CSV</button></div>'+
       '<div style="margin-top:8px"><button class="btn ghost block" data-act="resync">Re-send all data</button></div>'+
       '<div class="hint" style="margin-top:10px">"Re-send all" pushes every record again. It is safe — records update by id and won\'t duplicate. '+esc(storeNote)+'</div>'+
-      '<div class="hint" style="margin-top:6px;opacity:.7">Build: sync v5 · supabase</div></div>'+
+      '<div class="hint" style="margin-top:6px;opacity:.7">Build: app v9 · sync v6 · supabase</div></div>'+
 
       '<div class="panel" style="margin-top:14px"><div class="sheet-label" style="margin:0 0 10px">Customers & selling price</div>'+
       ((state.settings.customers||[]).length
@@ -2475,7 +2267,10 @@
       '<button class="btn elec block" style="margin-top:11px" data-act="add-customer">+ Add customer</button></div>'+
 
       '<div class="panel" style="margin-top:14px"><div class="sheet-label" style="margin:0 0 10px">Danger zone</div>'+
-      '<button class="btn danger block" data-act="reset">Erase all local data</button></div>';
+      '<button class="btn danger block" data-act="reset-device">Reset device &amp; clear cloud</button>'+
+      '<div class="hint" style="margin:8px 0 12px">Wipes this device and pushes an empty plant to the cloud so a fresh start actually holds. Clears runs, batches, dispatches, quality and bearing logs everywhere. Keeps this device\u2019s connection settings.</div>'+
+      '<button class="btn ghost block" data-act="reset">Erase local data only</button>'+
+      '<div class="hint" style="margin-top:8px;opacity:.8">Local-only erase — leaves the cloud copy untouched (it will sync back on next pull).</div></div>';
   }
 
   /* ===================== sheets ===================== */
@@ -2490,7 +2285,6 @@
     var m=M(mid), st=state.machines[mid];
     if(st.down) return openRepairSheet(mid);
     if(st.running) return openOffSheet(mid);
-    if(!shiftReady()) return;                 // production date must be set manually before any new run
     if(m.kind==="coarse"||m.kind==="grind") return openShiftStart(mid);
     if(m.kind==="autoclave") return openAutoclaveOn(mid);
     return openRefinerOn(mid);
@@ -2559,25 +2353,12 @@
         '<div class="field" style="margin-bottom:0"><input id="ac-batch" type="text" inputmode="numeric" autocomplete="off" placeholder="e.g. 2893"></div>'+
         '<div class="sheet-label">Loaded</div><div class="pickgrid">'+pairBtns+'</div></div>'+
       '<div id="ac-coarse" style="'+(specialMode?'display:none':'')+'">'+
-        '<div class="sheet-label">Batch number <span class="muted" style="text-transform:none;letter-spacing:0">— for the autoclave logbook</span></div>'+
-        '<div class="field"><input id="ac-cbatch" type="text" inputmode="numeric" autocomplete="off" placeholder="e.g. 2894"></div>'+
-        '<div class="sheet-label">Date</div>'+
+        '<div class="sheet-label">Coarse — no batch</div>'+
         '<div class="field" style="margin-bottom:0"><input id="ac-date" type="date" value="'+d.date+'"></div></div>'+
-      '<div id="ac-crumb" class="ro" style="margin-top:16px"></div>'+
       '<div class="field" style="margin-top:14px"><label>Loading time <span class="muted" style="text-transform:none;letter-spacing:0">— leave blank to start the timer now</span></label><input id="ac-loadtime" type="time"></div>'+
       '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button>'+
       '<button class="btn primary" id="ac-go">Load ▸</button></div>');
     function sel(group,one){ group.forEach(function(g){ g.classList.remove("sel"); }); one.classList.add("sel"); }
-    var crumbEl=sheet.querySelector("#ac-crumb"), goEl=sheet.querySelector("#ac-go");
-    function refreshCrumb(){
-      if(!picks.type){ crumbEl.style.display="none"; return; }
-      crumbEl.style.display="";
-      var store = picks.type==="coarse" ? "bike" : "truck";
-      var have = crumbAvail(store), need = m.capacity, after=Math.round((have-need)*100)/100, ok = have>=need;
-      crumbEl.innerHTML='<span class="k">'+(store==="bike"?"Bike crumb 20#":"Truck crumb 30#")+'</span>'+
-        '<span class="v" style="color:'+(ok?"var(--ok)":"var(--err)")+'">'+have+' / '+need+' kg'+(ok?'':' · short by '+Math.round((need-have)*100)/100+' kg')+'</span>';
-      goEl.disabled=!ok; goEl.style.opacity=ok?"1":".5"; goEl.textContent=ok?"Load ▸":"Not enough crumb";
-    }
     sheet.querySelectorAll("[data-pick-form]").forEach(function(el){
       el.addEventListener("click",function(){
         picks.form=el.getAttribute("data-pick-form"); picks.type=el.getAttribute("data-form-type");
@@ -2585,7 +2366,6 @@
         var sp=picks.type==="special";
         sheet.querySelector("#ac-special").style.display=sp?"":"none";
         sheet.querySelector("#ac-coarse").style.display=sp?"none":"";
-        refreshCrumb();
       });
     });
     sheet.querySelectorAll("[data-pick-pair]").forEach(function(el){
@@ -2599,16 +2379,15 @@
       function loadMs(dateStr){
         var t=(sheet.querySelector("#ac-loadtime")||{}).value||"";
         if(!t) return null;
-        var ms=Date.parse((dateStr||curShift().date||todayISO())+"T"+t); return isNaN(ms)?null:ms;
+        var ms=Date.parse((dateStr||todayISO())+"T"+t); return isNaN(ms)?null:ms;
       }
       if(picks.type==="coarse"){
         var dt=sheet.querySelector("#ac-date").value; if(!dt){ toast("Pick a date","warn"); return; }
-        startAutoclaveCoarse(mid, picks.form, m.capacity, defaultShift().shift, dt, loadMs(dt), (sheet.querySelector("#ac-cbatch").value||"").trim());
+        startAutoclaveCoarse(mid, picks.form, m.capacity, defaultShift().shift, dt, loadMs(dt));
       } else {
-        startAutoclave(mid, sheet.querySelector("#ac-batch").value, picks.form, picks.paired, loadMs(curShift().date));
+        startAutoclave(mid, sheet.querySelector("#ac-batch").value, picks.form, picks.paired, loadMs(todayISO()));
       }
     });
-    refreshCrumb();
   }
 
   function openRefinerOn(mid){
@@ -2714,7 +2493,7 @@
     openSheet('<div class="sheet-h"><span class="led" style="background:radial-gradient(circle at 35% 30%,#c8f0a0,var(--amber));box-shadow:0 0 10px 1px var(--amber)"></span><b>'+title+'</b></div>'+
       '<div class="sheet-sub">'+subline+'</div>'+
       fields+hourField+
-      (sw&&m.outWeight?'<div class="hint" style="margin-top:-4px">Output is weighed shiftwise in the Weigh tab after stopping'+(m.crumb?' — it adds to crumb stock.':'.')+'</div>':'')+
+      (sw&&m.outWeight?'<div class="hint" style="margin-top:-4px">Output is weighed shiftwise in the Weigh tab after stopping.</div>':'')+
       '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button>'+
       '<button class="btn primary" id="off-go">'+(m.kind==="autoclave"?"Log & unload":"Log run")+'</button></div>'+
       '<button class="btn danger block" id="off-cancelload" style="margin-top:10px">Cancel this load (entered by mistake)</button>');
@@ -2739,13 +2518,6 @@
       }
       if(fw) f.firewoodKg=num(fw.value);
       f.workers=wk?num(wk.value):null; if(wt) f.weightKg=num(wt.value);
-      // readings must move forward — final cannot be below the start reading
-      if(elec && f.elecStart!=null && f.elecEnd!=null && f.elecEnd < f.elecStart){
-        toast("Electricity: final reading "+f.elecEnd+" is below the start "+f.elecStart+". Check the meter.","err"); return;
-      }
-      if(m.kind!=="autoclave" && hr && hs!=null && f.hourEnd!=null && f.hourEnd < hs){
-        toast("Hour-meter: final reading "+f.hourEnd+" is below the start "+hs+". Check the reading.","err"); return;
-      }
       commitRun(mid,f);
     });
     var clb=sheet.querySelector("#off-cancelload");
@@ -2761,11 +2533,7 @@
   function cancelLoad(mid){
     var m=M(mid), st=state.machines[mid], run=st&&st.running;
     if(!run){ closeSheet(); return; }
-    var coarseAC = m.kind==="autoclave" && run.shiftwise && run.line==="coarse";
     var specialAC = m.kind==="autoclave" && !run.shiftwise;
-    if(coarseAC) addCrumb("bike", run.capacity||m.capacity);
-    if(specialAC) addCrumb("truck", m.capacity);
-    if(m.crumb && run.crumbAdded>0 && run.tyreType) takeCrumb(TYRES[run.tyreType].store, run.crumbAdded); // pull back live-weighed crumb
     var bid = specialAC ? run.batchId : null;
     st.running=null;                                   // discard the load (nothing committed)
     if(bid && !batchReferenced(bid)){                  // remove the stray batch if unused
@@ -2781,18 +2549,9 @@
     var what = sw
       ? (esc(run.shift)+' · '+esc(fmtDay(run.shiftDate))+(run.formulation?' · '+esc(run.formulation):''))
       : (esc(b?b.no:'?')+(b&&b.formulation?' · '+esc(b.formulation):''));
-    var refund="";
-    if(m.kind==="autoclave"){
-      var store=(sw&&run.line==="coarse")?"bike":"truck";
-      var kg=(sw?run.capacity:m.capacity)||m.capacity;
-      refund='<div class="hint" style="margin-top:8px">'+kg+' kg of '+(store==="bike"?"bike (20#)":"truck (30#)")+' crumb will be returned to stock.</div>';
-    } else if(m.crumb && run.crumbAdded>0 && run.tyreType){
-      refund='<div class="hint" style="margin-top:8px">'+Math.round(run.crumbAdded*100)/100+' kg of '+esc(TYRES[run.tyreType].label)+' crumb added during this shift will be removed from stock.</div>';
-    }
     openSheet('<div class="sheet-h"><b>Cancel this load?</b></div>'+
       '<div class="sheet-sub"><span class="batchref">'+esc(m.name)+'</span> · '+what+'</div>'+
       '<div class="hint">Removes the load from '+esc(m.name)+'. Nothing is logged or sent — use only if it was entered by mistake.</div>'+
-      refund+
       '<div class="sheet-actions"><button class="btn ghost" data-act="close">Keep loaded</button>'+
       '<button class="btn danger" id="cl-go">Yes, cancel load</button></div>');
     sheet.querySelector("#cl-go").addEventListener("click",function(){ cancelLoad(mid); });
@@ -2803,31 +2562,9 @@
     if(!r.weighEntries) r.weighEntries=[];
     var entries=r.weighEntries, total=sum(entries);
     var isSpecial = !r.shiftwise && r.machineId==="R4" && r.quality==="Special";
-    var isCrumbShift = !!(r.crumb && r.shiftwise && r.tyreType);
-    var already=Math.round((r.crumbAdded||0)*100)/100;
     var subline = '<div class="sheet-sub">'+(r.shiftwise
-        ? (r.line==="grind"?'Grinder crumb · ':'Coarse · ')+esc(r.shift)+' shift · '+esc(fmtDay(r.shiftDate))+(r.tyreType?' · '+esc(TYRES[r.tyreType].label)+' '+esc(TYRES[r.tyreType].mesh):'')+(r.formulation?' · '+esc(r.formulation):'')
+        ? (r.line==="grind"?'Grinder output · ':'Coarse · ')+esc(r.shift)+' shift · '+esc(fmtDay(r.shiftDate))+(r.tyreType?' · '+esc(TYRES[r.tyreType].label)+' '+esc(TYRES[r.tyreType].mesh):'')+(r.formulation?' · '+esc(r.formulation):'')
         : '<span class="batchref">'+esc(r.batchNo)+'</span> · '+esc(r.formulation)+' · '+esc(r.quality))+'</div>';
-
-    if(isCrumbShift){
-      // Grinder crumb: live weighings already added to stock — supervisor logs the actual shift total.
-      var refList = entries.length
-        ? '<div class="weighlist" style="opacity:.85">'+entries.map(function(v){ return '<div class="weighrow"><span class="tnum">'+v+' kg</span><span class="muted" style="font-size:11px">in stock</span></div>'; }).join("")+'</div>'
-        : '';
-      openSheet('<div class="sheet-h"><span class="led" style="background:radial-gradient(circle at 35% 30%,#9fe0ea,var(--elec));box-shadow:0 0 10px 1px var(--elec)"></span><b>Weigh output · shift total</b></div>'+
-        subline+
-        '<div class="ro" style="margin-bottom:6px"><span class="k">Already in crumb stock this shift</span><span class="v" style="color:var(--ok)">'+already+' kg</span></div>'+
-        (entries.length?'<div class="hint" style="margin:2px 0 10px">Logged live while running — autoclaves can already load it.</div>'+refList:'<div class="hint" style="margin:2px 0 10px">Nothing was weighed live this shift.</div>')+
-        '<div class="sheet-label" style="margin-top:14px">Total shift weight</div>'+
-        '<div class="field"><div class="num-suffix"><input id="w-total" type="number" inputmode="decimal" placeholder="total kg for the shift" value="'+(already>0?already:'')+'"><span class="sfx">kg</span></div></div>'+
-        '<div class="hint" style="margin-top:-4px">Enter the actual total crumb produced this shift. The '+already+' kg already in stock is counted in this total — only the difference is added now.</div>'+
-        '<div class="sheet-actions"><button class="btn ghost" data-act="close">Close</button>'+
-        '<button class="btn primary" id="w-submit">Submit shift total</button></div>');
-      var tinp=sheet.querySelector("#w-total");
-      setTimeout(function(){ try{ tinp.focus(); tinp.select(); }catch(e){} },120);
-      sheet.querySelector("#w-submit").addEventListener("click",function(){ submitShiftTotal(runId, num(tinp.value)); });
-      return;
-    }
 
     var convBox = isSpecial ? '<div class="sheet-label" style="margin-top:16px">Found SuperFine in this Special?</div>'+
       '<div class="field-inline" style="align-items:stretch"><div class="field" style="flex:2;margin-bottom:0"><div class="num-suffix"><input id="w-conv" type="number" inputmode="decimal" placeholder="0"><span class="sfx">kg</span></div></div>'+
@@ -2890,8 +2627,7 @@
     else if(active==="dispatch") html=viewDispatch();
     else if(active==="quality") html=viewQuality();
     else if(active==="history") html=viewHistory();
-    else if(active==="bearings") html=viewBearings();
-    else if(active==="reports") html=viewReports();
+    else if(active==="bearing") html=viewBearing();
     else if(active==="settings") html=viewSettings();
     var sameTab=(lastTab===active);
     var winY=sameTab?(window.pageYOffset||document.documentElement.scrollTop||document.body.scrollTop||0):0;
@@ -2901,10 +2637,6 @@
     else { v.scrollTop=0; window.scrollTo(0,0); }
     lastTab=active;
   }
-
-  document.body.addEventListener("change",function(e){
-    var d=e.target.closest("#hv-date"); if(d){ HV=HV||{}; HV.date=d.value||""; HV.machine=null; render(); }
-  });
 
   document.getElementById("tabs").addEventListener("click",function(e){
     var b=e.target.closest("[data-tab]"); if(!b) return; active=b.getAttribute("data-tab"); render();
@@ -2923,16 +2655,12 @@
     if((t=e.target.closest("[data-breakdown-go]"))){ doMarkDown(t.getAttribute("data-breakdown-go")); return; }
     if((t=e.target.closest("[data-breakdown]"))){ markDown(t.getAttribute("data-breakdown")); return; }
     if((t=e.target.closest("[data-shift]"))){ openShiftPicker(); return; }
-    if((t=e.target.closest("[data-shiftreport]"))){ openShiftReport(t.getAttribute("data-shiftreport")); return; }
     if((t=e.target.closest("[data-machine]"))){ openMachineSheet(t.getAttribute("data-machine")); return; }
     if((t=e.target.closest("[data-weigh]"))){ openWeighSheet(t.getAttribute("data-weigh")); return; }
     if((t=e.target.closest("[data-pack]"))){ openPackSheet(t.getAttribute("data-pack")); return; }
     if((t=e.target.closest("[data-load]"))){ openLoadDetail(t.getAttribute("data-load")); return; }
-    if((t=e.target.closest("[data-qc-batch]"))){ openQcBatch(t.getAttribute("data-qc-batch"), t.getAttribute("data-qc-q")||""); return; }
+    if((t=e.target.closest("[data-qc-batch]"))){ openQcBatch(t.getAttribute("data-qc-batch")); return; }
     if((t=e.target.closest("[data-qc-coarse]"))){ openQcCoarse(t.getAttribute("data-qc-coarse")); return; }
-    if((t=e.target.closest("[data-hv-shift]"))){ HV=HV||{}; HV.shift=t.getAttribute("data-hv-shift"); HV.machine=null; render(); return; }
-    if((t=e.target.closest("[data-hv-machine]"))){ HV=HV||{}; HV.machine=t.getAttribute("data-hv-machine"); render(); return; }
-    if((t=e.target.closest("[data-hv-back]"))){ HV=HV||{}; HV.machine=null; render(); return; }
     if((t=e.target.closest("[data-edit-run]"))){ openEditRun(t.getAttribute("data-edit-run")); return; }
     if((t=e.target.closest("[data-custdel]"))){ var cd=t.getAttribute("data-custdel");
       state.settings.customers=(state.settings.customers||[]).filter(function(c){ return c.code!==cd; }); save(); render(); return; }
@@ -2991,6 +2719,14 @@
         '<button class="btn danger" data-act="reset-confirm">Erase everything</button></div>');
     }
     else if(act==="reset-confirm"){ state=blank(); MACHINES.forEach(function(m){ state.machines[m.id]={running:null,down:null}; }); save(); closeSheet(); active="machines"; render(); toast("All data erased","ok"); }
+    else if(act==="reset-device"){
+      openSheet('<div class="sheet-h"><span class="led" style="background:radial-gradient(circle at 35% 30%,#ffb3b3,var(--err));box-shadow:0 0 10px 1px var(--err)"></span><b>Reset device &amp; clear cloud?</b></div>'+
+        '<div class="sheet-sub">This wipes this tablet <b>and</b> the shared cloud copy — every batch, run, dispatch, quality result and bearing log for the whole plant. An empty plant is pushed so the fresh start holds. This cannot be undone.</div>'+
+        '<div class="hint" style="margin-top:8px">Connection settings (Supabase URL, key, device name, role, PIN) are kept so this tablet stays connected.</div>'+
+        '<div class="sheet-actions"><button class="btn ghost" data-act="close">Keep data</button>'+
+        '<button class="btn danger" data-act="reset-device-go">Reset &amp; clear cloud</button></div>');
+    }
+    else if(act==="reset-device-go"){ resetDevice(); }
   });
 
   /* live timers */
@@ -3061,9 +2797,7 @@
       }
     }});
     pullQuality();
-   
     flushQcUploads();
-   
   }, 1500);
   if("serviceWorker" in navigator){ try{ navigator.serviceWorker.register("sw.js"); }catch(e){} }
 })();
