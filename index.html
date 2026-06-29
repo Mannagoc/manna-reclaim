@@ -165,6 +165,8 @@
   .shiftchip{ display:inline-flex; align-items:center; gap:5px; background:#141a20; border:1px solid #3f4a55; color:var(--ink-dim);
     padding:5px 11px; border-radius:999px; font-size:12px; cursor:pointer; }
   .shiftchip b{ color:var(--ink); }
+  .shiftchip.pinned{ background:#241d10; border-color:#5a4420; color:var(--amber); }
+  .shiftchip.pinned b{ color:var(--amber); }
   .shiftrow{ width:100%; display:flex; align-items:center; justify-content:space-between; gap:10px; background:#141a0e; border:1px solid var(--line);
     border-radius:10px; padding:11px 13px; margin-bottom:7px; cursor:pointer; color:var(--ink); text-align:left; }
   .shiftrow:active{ transform:scale(.995); }
@@ -502,9 +504,9 @@
   function todayISO(){ var d=new Date(),m=d.getMonth()+1,day=d.getDate(); return d.getFullYear()+"-"+(m<10?"0":"")+m+"-"+(day<10?"0":"")+day; }
   function autoShift(){ var h=new Date().getHours(); return (h>=6&&h<18)?"Day":"Night"; }
   function curShift(){ if(!state.shift) state.shift={date:todayISO(),name:autoShift()}; return state.shift; }
-  function setShift(name,date,supervisor){ var c=curShift(); state.shift={ name:name||c.name, date:date||todayISO(), supervisor:(supervisor!=null?supervisor:c.supervisor)||"" }; save(); render(); pushShift(); }
+  function setShift(name,date,supervisor,manual){ var c=curShift(); state.shift={ name:name||c.name, date:date||todayISO(), supervisor:(supervisor!=null?supervisor:c.supervisor)||"", manual:!!manual }; save(); render(); pushShift(); }
   function autoShiftNow(){ return { date:todayISO(), name:autoShift() }; }
-  function refreshAutoShift(){ var a=autoShiftNow(), c=curShift(); if(c.name!==a.name || c.date!==a.date){ state.shift={ name:a.name, date:a.date, supervisor:c.supervisor||"" }; } }
+  function refreshAutoShift(){ var c=curShift(); if(c.manual) return; var a=autoShiftNow(); if(c.name!==a.name || c.date!==a.date){ state.shift={ name:a.name, date:a.date, supervisor:c.supervisor||"", manual:false }; } }
   function pushShift(){
     if(syncTarget()!=="supabase") return;
     var c=curShift(); if(!c.supervisor) return;
@@ -652,6 +654,7 @@
   function fmtDay(iso){ if(!iso) return ""; var p=String(iso).split("-"); if(p.length<3) return iso;
     var mo=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]; return parseInt(p[2],10)+" "+mo[parseInt(p[1],10)-1]; }
   function defaultShift(){
+    if(state.shift && state.shift.manual) return { date:state.shift.date, shift:state.shift.name };   // honour an active back-date
     var now=new Date(), mins=now.getHours()*60+now.getMinutes(), d=new Date(now), shift;
     if(mins>=510 && mins<1230){ shift="Day"; }            // 08:30–20:30
     else if(mins>=1230){ shift="Night"; }                  // 20:30 onward
@@ -1381,7 +1384,9 @@
     var dueBar = due.length ? '<div class="duebar" data-bearings-any="1">🌡 '+due.length+' machine'+(due.length>1?'s':'')+' due for bearing temp logging — '+due.map(function(m){return esc(m.short);}).join(", ")+' · tap to log</div>' : '';
     var c=curShift();
     var sup = c.supervisor ? esc(c.supervisor) : '<span style="color:var(--amber)">set supervisor</span>';
-    return '<div class="view-head"><h1>Machines</h1><div class="meta"><span class="shiftchip" data-shift="1"><b>'+esc(c.name)+'</b> · '+esc(fmtDay(c.date))+' · 👤 '+sup+' <span style="opacity:.6">▾</span></span></div></div>'+dueBar+body;
+    var pinChip = c.manual ? '<span style="color:var(--amber)">\uD83D\uDCCC </span>' : '';
+    var backdateBar = c.manual ? '<div class="duebar" data-shift="1" style="background:var(--amber-soft,#2a2212);border-color:#5a4420;color:var(--amber)">📌 Back-dating to '+esc(fmtDay(c.date))+' · '+esc(c.name)+' — everything you log now is saved under this date. Tap to switch back to today.</div>' : '';
+    return '<div class="view-head"><h1>Machines</h1><div class="meta"><span class="shiftchip'+(c.manual?' pinned':'')+'" data-shift="1">'+pinChip+'<b>'+esc(c.name)+'</b> · '+esc(fmtDay(c.date))+' · 👤 '+sup+' <span style="opacity:.6">▾</span></span></div></div>'+backdateBar+dueBar+body;
   }
   function lastRunFor(mid){
     var last=null;
@@ -1506,8 +1511,10 @@
 
   /* ----- shift context & report ----- */
   function openShiftPicker(){ var c=curShift(); var pick={name:c.name};
+    var pinned=!!c.manual, today=todayISO();
     openSheet('<div class="sheet-h"><b>Shift &amp; supervisor</b></div>'+
-      '<div class="sheet-sub">The shift follows the clock automatically. Set who is in charge — it is tagged on everything logged this shift.</div>'+
+      '<div class="sheet-sub">Set who is in charge — it is tagged on everything logged for this shift. Pick a past <b>date</b> to back-log production; it stays on that date until you switch back to today.</div>'+
+      (pinned?'<div class="hint" style="color:var(--amber);margin:-2px 0 10px">\uD83D\uDCCC Logging to '+esc(fmtDay(c.date))+' ('+esc(c.name)+') — not today. New entries are saved under this date.</div>':'')+
       '<div class="field"><label>Supervisor in charge</label><select id="sh-sup">'+
         '<option value="">— select —</option>'+
         SUPERVISORS.map(function(n){ return '<option value="'+esc(n)+'"'+(c.supervisor===n?' selected':'')+'>'+esc(n)+'</option>'; }).join("")+
@@ -1516,14 +1523,20 @@
       '<div class="sheet-label">Shift</div><div class="pickgrid q4">'+
         '<button class="pick'+(c.name==="Day"?" sel":"")+'" data-shift-set="Day"><b>Day</b></button>'+
         '<button class="pick'+(c.name==="Night"?" sel":"")+'" data-shift-set="Night"><b>Night</b></button></div>'+
-      '<div class="field" style="margin-top:14px"><label>Date <span class="muted" style="text-transform:none;letter-spacing:0">— auto today</span></label><input id="sh-date" type="date" value="'+esc(c.date)+'"></div>'+
-      '<div class="sheet-actions"><button class="btn primary block" id="sh-done">Save</button></div>');
+      '<div class="field" style="margin-top:14px"><label>Date <span class="muted" style="text-transform:none;letter-spacing:0">— back-date to log an earlier day</span></label><input id="sh-date" type="date" max="'+today+'" value="'+esc(c.date)+'"></div>'+
+      '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button><button class="btn primary" id="sh-done">Save</button></div>'+
+      ((pinned||c.date!==today)?'<button class="btn ghost block" id="sh-today" style="margin-top:10px">↻ Back to today (live)</button>':''));
     sheet.querySelectorAll("[data-shift-set]").forEach(function(el){ el.addEventListener("click",function(){
       pick.name=el.getAttribute("data-shift-set");
       sheet.querySelectorAll("[data-shift-set]").forEach(function(g){ g.classList.remove("sel"); }); el.classList.add("sel"); }); });
     sheet.querySelector("#sh-done").addEventListener("click",function(){
       var date=(sheet.querySelector("#sh-date").value||c.date), sup=(sheet.querySelector("#sh-sup").value||"").trim();
-      setShift(pick.name,date,sup); closeSheet(); toast("Saved · "+pick.name+(sup?" · "+sup:""),"ok"); }); }
+      var manual=(date!==todayISO());                                  // a back-date stays put; today's date follows the clock
+      setShift(pick.name,date,sup,manual); closeSheet();
+      toast((manual?"Back-dated to "+fmtDay(date):"Saved")+" · "+pick.name+(sup?" · "+sup:""),"ok"); });
+    var todayBtn=sheet.querySelector("#sh-today");
+    if(todayBtn) todayBtn.addEventListener("click",function(){
+      var a=autoShiftNow(); setShift(a.name, a.date, c.supervisor||"", false); closeSheet(); toast("Back to today \u00b7 "+a.name,"ok"); }); }
 
 
   function fmtAgo(ms){ var s=Math.round((Date.now()-ms)/1000); if(s<60) return s+"s ago"; var mn=Math.round(s/60); if(mn<60) return mn+"m ago"; var h=Math.floor(mn/60); var rem=mn%60; return h+"h"+(rem?" "+rem+"m":"")+" ago"; }
@@ -2287,7 +2300,7 @@
       '<button class="btn ghost" data-act="export">Export CSV</button></div>'+
       '<div style="margin-top:8px"><button class="btn ghost block" data-act="resync">Re-send all data</button></div>'+
       '<div class="hint" style="margin-top:10px">"Re-send all" pushes every record again. It is safe — records update by id and won\'t duplicate. '+esc(storeNote)+'</div>'+
-      '<div class="hint" style="margin-top:6px;opacity:.7">Build: app v13 · sync v6 · supabase</div></div>'+
+      '<div class="hint" style="margin-top:6px;opacity:.7">Build: app v14 · sync v6 · supabase</div></div>'+
 
       '<div class="panel" style="margin-top:14px"><div class="sheet-label" style="margin:0 0 10px">Customers & selling price</div>'+
       ((state.settings.customers||[]).length
