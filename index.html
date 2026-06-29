@@ -686,10 +686,17 @@
     save(); closeSheet(); render(); toast(m.short+" started · "+shift+(tyreType?" · "+TYRES[tyreType].label:""),"ok");
     postStatus(mid,"running");
   }
-  function startAutoclaveCoarse(mid, formName, cap, shift, shiftDate, loadedAt){
-    var m=M(mid);
-    state.machines[mid].running={ shiftwise:true, line:"coarse", autoclaveId:m.id, formulation:formName, capacity:cap, shift:shift, shiftDate:shiftDate, loadedAt:(loadedAt!=null?loadedAt:Date.now()), segStart:Date.now(), accumMs:0, paused:false };
-    save(); closeSheet(); render(); toast(m.name+" loaded · coarse","ok");
+  function coarseBatchExists(no){
+    no=String(no||"").toLowerCase(); if(!no) return false;
+    if(state.runs.some(function(r){ return r.line==="coarse" && r.kind==="autoclave" && String(r.batchNo||"").toLowerCase()===no; })) return true;
+    return MACHINES.some(function(mm){ var rr=state.machines[mm.id].running; return rr && rr.shiftwise && rr.line==="coarse" && String(rr.batchNo||"").toLowerCase()===no; });
+  }
+  function startAutoclaveCoarse(mid, formName, cap, shift, shiftDate, loadedAt, batchNo){
+    var m=M(mid); batchNo=(batchNo||"").trim();
+    if(!batchNo){ toast("Enter a coarse batch number","warn"); return; }
+    if(coarseBatchExists(batchNo)){ toast("Coarse batch "+batchNo+" already exists","warn"); return; }
+    state.machines[mid].running={ shiftwise:true, line:"coarse", autoclaveId:m.id, batchNo:batchNo, formulation:formName, capacity:cap, shift:shift, shiftDate:shiftDate, loadedAt:(loadedAt!=null?loadedAt:Date.now()), segStart:Date.now(), accumMs:0, paused:false };
+    save(); closeSheet(); render(); toast(m.name+" loaded · coarse "+batchNo,"ok");
     postStatus(mid,"running");
   }
   function pauseMachine(mid){
@@ -713,7 +720,7 @@
     if(run && status!=="idle"){
       if(run.shiftwise){
         line=run.line||""; tyre=run.tyreType?TYRES[run.tyreType].mesh:"";
-        what=(run.formulation?run.formulation+" · ":"")+(run.shift||"")+(run.shiftDate?" "+fmtDay(run.shiftDate):"");
+        what=(run.batchNo?run.batchNo+" · ":"")+(run.formulation?run.formulation+" · ":"")+(run.shift||"")+(run.shiftDate?" "+fmtDay(run.shiftDate):"");
       } else {
         line="special"; var b=batch(run.batchId);
         what=(b?b.no:"")+(run.quality?" · "+run.quality:"")+(b&&b.formulation?" · "+b.formulation:"");
@@ -746,8 +753,10 @@
     }
 
     if(run.shiftwise){
-      // Shiftwise run (coarse or grind) -> accumulate by machine + shift date + shift
-      var cex=shiftRowFor(m.id, run.shiftDate, run.shift);
+      // Shiftwise run (coarse refiners + grinders) -> accumulate by machine + shift date + shift.
+      // A coarse autoclave load carries its own batch number, so it is logged as its own row.
+      var isBatchedAuto = (m.kind==="autoclave" && run.batchNo);
+      var cex = isBatchedAuto ? null : shiftRowFor(m.id, run.shiftDate, run.shift);
       if(cex){
         cex.kWh=addNum(cex.kWh, fields.kWh);
         cex.firewoodKg=addNum(cex.firewoodKg, fields.firewoodKg);
@@ -770,7 +779,7 @@
           id:uid(), device:state.settings.device||"", machine:m.name, machineId:m.id, short:m.short, kind:m.kind, line:run.line, shiftwise:true,
           shift:run.shift, shiftDate:run.shiftDate, supervisor:curShift().supervisor||"", formulation:run.formulation||"", capacity:run.capacity||"",
           tyreType:run.tyreType||"", mesh:run.tyreType?TYRES[run.tyreType].mesh:"",
-          batchId:"", batchNo:"", autoclaveId:(m.kind==="autoclave"?m.id:(run.autoclaveId||"")), paired:false, quality:"", passes:1,
+          batchId:"", batchNo:(run.batchNo||""), autoclaveId:(m.kind==="autoclave"?m.id:(run.autoclaveId||"")), paired:false, quality:"", passes:1,
           start:run.segStart||end, end:end, runtimeMin:runtimeMin, hoursRun:Math.round((runtimeMin/60)*100)/100,
           loadedAt:(fields.loadedAt!=null?fields.loadedAt:null), unloadedAt:(fields.unloadedAt!=null?fields.unloadedAt:null),
           kWh:fields.kWh==null?"":fields.kWh, elecStart:fields.elecStart==null?"":fields.elecStart, elecEnd:fields.elecEnd==null?"":fields.elecEnd,
@@ -1399,6 +1408,7 @@
       var what;
       if(run.shiftwise){
         what='<span class="qchip shift" style="background:'+(run.line==="grind"?"var(--steel)":"var(--ember)")+';'+(run.line==="grind"?"color:#0e1a08":"")+'">'+esc(run.shift)+'</span>'+
+          (run.batchNo?'<span class="batchref">'+esc(run.batchNo)+'</span>':'')+
           '<span class="formchip">'+esc(fmtDay(run.shiftDate))+'</span>'+
           (run.formulation?'<span class="formchip">'+esc(run.formulation)+'</span>':'')+
           (run.tyreType?'<span class="formchip" style="color:var(--steel)">'+esc(TYRES[run.tyreType].label)+' · '+esc(TYRES[run.tyreType].mesh)+'</span>':'');
@@ -2085,7 +2095,7 @@
       if(r.firewoodKg!==""&&r.firewoodKg!=null) ep.push(esc(r.firewoodKg)+' kg');
       var energy = ep.length ? ep.join(' · ') : '—';
       var when = isShift ? (esc(fmtDay(r.shiftDate))+' '+esc(r.shift)) : fmtDate(r.end);
-      var col2 = isShift ? '<span class="qchip shift"'+(r.line==="coarse"?' style="background:var(--ember)"':'')+'>'+esc(r.shift)+'</span>'+(r.formulation?'<br><span class="muted" style="font-size:10px">'+esc(r.formulation)+'</span>':'')
+      var col2 = isShift ? '<span class="qchip shift"'+(r.line==="coarse"?' style="background:var(--ember)"':'')+'>'+esc(r.shift)+'</span>'+(r.batchNo?' <span class="batchref" style="font-size:11px">'+esc(r.batchNo)+'</span>':'')+(r.formulation?'<br><span class="muted" style="font-size:10px">'+esc(r.formulation)+'</span>':'')
                       : '<span class="batchref" style="font-size:12px">'+esc(r.batchNo)+'</span>'+(r.quality?'<br>'+qchip(r.quality):'');
       var wt = (r.weightKg!==""&&r.weightKg!=null) ? esc(r.weightKg)+' kg' : (r.machineId==="R4" ? '<span class="muted">pending</span>' : '—');
       var mlabel = r.short || shortName(r.machineId);
@@ -2120,6 +2130,9 @@
       var qopts='<option value="">—</option>'+QUALITIES.map(function(q){ return '<option value="'+esc(q)+'"'+(r.quality===q?" selected":"")+'>'+esc(q)+'</option>'; }).join("");
       rows+='<div class="field"><label>Quality</label><select id="e-qual">'+qopts+'</select></div>';
     } else {
+      if(isAuto){
+        rows+='<div class="field"><label>Coarse batch number</label><input id="e-cbatch" type="text" value="'+esc(r.batchNo==null?"":r.batchNo)+'"></div>';
+      }
       rows+='<div class="field-inline">'+
         '<div class="field"><label>Shift</label><select id="e-shift"><option value="Day"'+(r.shift==="Day"?" selected":"")+'>Day</option><option value="Night"'+(r.shift==="Night"?" selected":"")+'>Night</option></select></div>'+
         '<div class="field"><label>Shift date</label><input id="e-sdate" type="date" value="'+esc(r.shiftDate||"")+'"></div></div>';
@@ -2146,6 +2159,7 @@
       } else {
         var es=sheet.querySelector("#e-shift"), ed=sheet.querySelector("#e-sdate");
         if(es) r.shift=es.value; if(ed && ed.value) r.shiftDate=ed.value;
+        var ecb=sheet.querySelector("#e-cbatch"); if(ecb) r.batchNo=(ecb.value||"").trim();
       }
       var ert=sheet.querySelector("#e-rt"); if(ert) r.runtimeMin=num(ert.value);
       var ewk=sheet.querySelector("#e-wk"); if(ewk) r.workers=num(ewk.value);
@@ -2252,7 +2266,7 @@
       '<button class="btn ghost" data-act="export">Export CSV</button></div>'+
       '<div style="margin-top:8px"><button class="btn ghost block" data-act="resync">Re-send all data</button></div>'+
       '<div class="hint" style="margin-top:10px">"Re-send all" pushes every record again. It is safe — records update by id and won\'t duplicate. '+esc(storeNote)+'</div>'+
-      '<div class="hint" style="margin-top:6px;opacity:.7">Build: app v9 · sync v6 · supabase</div></div>'+
+      '<div class="hint" style="margin-top:6px;opacity:.7">Build: app v10 · sync v6 · supabase</div></div>'+
 
       '<div class="panel" style="margin-top:14px"><div class="sheet-label" style="margin:0 0 10px">Customers & selling price</div>'+
       ((state.settings.customers||[]).length
@@ -2353,7 +2367,9 @@
         '<div class="field" style="margin-bottom:0"><input id="ac-batch" type="text" inputmode="numeric" autocomplete="off" placeholder="e.g. 2893"></div>'+
         '<div class="sheet-label">Loaded</div><div class="pickgrid">'+pairBtns+'</div></div>'+
       '<div id="ac-coarse" style="'+(specialMode?'display:none':'')+'">'+
-        '<div class="sheet-label">Coarse — no batch</div>'+
+        '<div class="sheet-label">Coarse batch number</div>'+
+        '<div class="field" style="margin-bottom:0"><input id="ac-cbatch" type="text" inputmode="numeric" autocomplete="off" placeholder="e.g. C-2893"></div>'+
+        '<div class="sheet-label">Shift date</div>'+
         '<div class="field" style="margin-bottom:0"><input id="ac-date" type="date" value="'+d.date+'"></div></div>'+
       '<div class="field" style="margin-top:14px"><label>Loading time <span class="muted" style="text-transform:none;letter-spacing:0">— leave blank to start the timer now</span></label><input id="ac-loadtime" type="time"></div>'+
       '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button>'+
@@ -2383,7 +2399,7 @@
       }
       if(picks.type==="coarse"){
         var dt=sheet.querySelector("#ac-date").value; if(!dt){ toast("Pick a date","warn"); return; }
-        startAutoclaveCoarse(mid, picks.form, m.capacity, defaultShift().shift, dt, loadMs(dt));
+        startAutoclaveCoarse(mid, picks.form, m.capacity, defaultShift().shift, dt, loadMs(dt), sheet.querySelector("#ac-cbatch").value);
       } else {
         startAutoclave(mid, sheet.querySelector("#ac-batch").value, picks.form, picks.paired, loadMs(todayISO()));
       }
@@ -2488,7 +2504,7 @@
     }
     var title=m.kind==="autoclave"?(sw?"Unload Autoclave · Coarse":"Unload Autoclave"):"Stop "+m.name;
     var subline = sw
-      ? '<span class="qchip shift" style="background:'+(run.line==="grind"?"var(--steel);color:#0e1a08":"var(--ember)")+'">'+esc(run.shift)+'</span> '+esc(fmtDay(run.shiftDate))+(run.formulation?' · '+esc(run.formulation):'')+(run.tyreType?' · '+esc(TYRES[run.tyreType].label)+' '+esc(TYRES[run.tyreType].mesh):'')
+      ? '<span class="qchip shift" style="background:'+(run.line==="grind"?"var(--steel);color:#0e1a08":"var(--ember)")+'">'+esc(run.shift)+'</span> '+esc(fmtDay(run.shiftDate))+(run.batchNo?' · <span class="batchref">'+esc(run.batchNo)+'</span>':'')+(run.formulation?' · '+esc(run.formulation):'')+(run.tyreType?' · '+esc(TYRES[run.tyreType].label)+' '+esc(TYRES[run.tyreType].mesh):'')
       : '<span class="batchref">'+esc(b?b.no:'?')+'</span> · '+esc(b?b.formulation:'')+(run.quality?' · '+esc(run.quality):'')+(run.sourceBatches&&run.sourceBatches.length>1?' · <span class="muted" style="text-transform:none;letter-spacing:0">mix '+esc(run.sourceBatches.join(" + "))+'</span>':'');
     openSheet('<div class="sheet-h"><span class="led" style="background:radial-gradient(circle at 35% 30%,#c8f0a0,var(--amber));box-shadow:0 0 10px 1px var(--amber)"></span><b>'+title+'</b></div>'+
       '<div class="sheet-sub">'+subline+'</div>'+
@@ -2547,7 +2563,7 @@
     var m=M(mid), run=state.machines[mid].running; if(!run){ closeSheet(); return; }
     var sw=!!run.shiftwise, b=sw?null:batch(run.batchId);
     var what = sw
-      ? (esc(run.shift)+' · '+esc(fmtDay(run.shiftDate))+(run.formulation?' · '+esc(run.formulation):''))
+      ? ((run.batchNo?esc(run.batchNo)+' · ':'')+esc(run.shift)+' · '+esc(fmtDay(run.shiftDate))+(run.formulation?' · '+esc(run.formulation):''))
       : (esc(b?b.no:'?')+(b&&b.formulation?' · '+esc(b.formulation):''));
     openSheet('<div class="sheet-h"><b>Cancel this load?</b></div>'+
       '<div class="sheet-sub"><span class="batchref">'+esc(m.name)+'</span> · '+what+'</div>'+
