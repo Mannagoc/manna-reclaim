@@ -1179,6 +1179,9 @@
     delete d.settings;                                   // each phone keeps its own keys / pin / device name / role
     delete d.sharedVersion; delete d.lastSharedBy; delete d.lastSharedAt;
     delete d.pendingDeletes; delete d.pendingLoadDeletes; delete d.lastSyncAt;
+    // A manual back-date is local to this device — share a live shift instead so other
+    // tablets are never dragged onto an earlier date.
+    if(d.shift && d.shift.manual){ d.shift={ date:todayISO(), name:autoShift(), supervisor:(state.shift.supervisor||"") }; }
     if(d.dispatchLoads) d.dispatchLoads=d.dispatchLoads.filter(function(l){ return !l.dummy; });
     return d;
   }
@@ -1188,10 +1191,12 @@
     var keepSettings=state.settings;                     // preserve this device's own settings
     var keepVer=state.sharedVersion, keepBy=state.lastSharedBy, keepAt=state.lastSharedAt;
     var keepPendD=state.pendingDeletes, keepPendL=state.pendingLoadDeletes, keepLast=state.lastSyncAt;
+    var keepShift=(state.shift && state.shift.manual)?state.shift:null;   // a local back-date must never be reverted by a pull
     Object.keys(doc).forEach(function(k){ state[k]=doc[k]; });
     state.settings=keepSettings;
     state.sharedVersion=keepVer; state.lastSharedBy=keepBy; state.lastSharedAt=keepAt;
     state.pendingDeletes=keepPendD||[]; state.pendingLoadDeletes=keepPendL||[]; state.lastSyncAt=keepLast||0;
+    if(keepShift) state.shift=keepShift;
     if(!state.machines) state.machines={};
     MACHINES.forEach(function(m){ if(!state.machines[m.id]) state.machines[m.id]={running:null,down:null}; else if(state.machines[m.id].down===undefined) state.machines[m.id].down=null; });
     if(!state.dispatchLoads) state.dispatchLoads=[];
@@ -2300,7 +2305,7 @@
       '<button class="btn ghost" data-act="export">Export CSV</button></div>'+
       '<div style="margin-top:8px"><button class="btn ghost block" data-act="resync">Re-send all data</button></div>'+
       '<div class="hint" style="margin-top:10px">"Re-send all" pushes every record again. It is safe — records update by id and won\'t duplicate. '+esc(storeNote)+'</div>'+
-      '<div class="hint" style="margin-top:6px;opacity:.7">Build: app v14 · sync v6 · supabase</div></div>'+
+      '<div class="hint" style="margin-top:6px;opacity:.7">Build: app v15 · sync v6 · supabase</div></div>'+
 
       '<div class="panel" style="margin-top:14px"><div class="sheet-label" style="margin:0 0 10px">Customers & selling price</div>'+
       ((state.settings.customers||[]).length
