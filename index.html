@@ -2278,7 +2278,9 @@
       '<button class="btn ghost" data-act="export">Export CSV</button></div>'+
       '<div style="margin-top:8px"><button class="btn ghost block" data-act="resync">Re-send all data</button></div>'+
       '<div class="hint" style="margin-top:10px">"Re-send all" pushes every record again. It is safe — records update by id and won\'t duplicate. '+esc(storeNote)+'</div>'+
-      '<div class="hint" style="margin-top:6px;opacity:.7">Build: app v18 · sync v6 · supabase</div></div>'+
+      '<div style="margin-top:12px"><button class="btn ghost block" data-act="force-update">↻ Update app to latest version</button></div>'+
+      '<div class="hint" style="margin-top:8px;opacity:.85">Use this if the tablet is stuck on an old version. It clears the cache and reloads the newest code from the server (needs internet).</div>'+
+      '<div class="hint" style="margin-top:6px;opacity:.7">Build: app v19 · sync v6 · supabase</div></div>'+
 
       '<div class="panel" style="margin-top:14px"><div class="sheet-label" style="margin:0 0 10px">Customers & selling price</div>'+
       ((state.settings.customers||[]).length
@@ -2795,6 +2797,7 @@
       save(); render(); syncNow();
     }
     else if(act==="export"){ exportCSV(); }
+    else if(act==="force-update"){ forceUpdate(); }
     else if(act==="set-role"){
       var dEl=document.getElementById("set-device"), uEl=document.getElementById("set-url"), pEl=document.getElementById("set-pin");
       var sbU=document.getElementById("set-sburl"), sbK=document.getElementById("set-sbkey");
@@ -2901,6 +2904,30 @@
     flushQcUploads();
   }, 1500);
   if("serviceWorker" in navigator){ try{ navigator.serviceWorker.register("sw.js"); }catch(e){} }
+
+  /* Manual "Update app" — wipes the cached code + service worker and reloads the
+     newest version straight from the server. Used when a tablet is stuck on an old build. */
+  window.forceUpdate=function(){
+    if(navigator.onLine===false){ toast("No internet — connect first, then update","warn"); return; }
+    toast("Updating to the latest version…","ok");
+    var reloaded=false;
+    function reload(){ if(reloaded) return; reloaded=true;
+      try{ var u=location.href.split("#")[0]; location.replace(u+(u.indexOf("?")>-1?"&":"?")+"v="+Date.now()); }
+      catch(e){ location.reload(); } }
+    var steps=[];
+    if(navigator.serviceWorker && navigator.serviceWorker.getRegistrations){
+      steps.push(navigator.serviceWorker.getRegistrations().then(function(regs){
+        return Promise.all((regs||[]).map(function(r){ try{ return r.unregister(); }catch(e){ return null; } }));
+      }).catch(function(){}));
+    }
+    if(window.caches && caches.keys){
+      steps.push(caches.keys().then(function(keys){
+        return Promise.all((keys||[]).map(function(k){ return caches.delete(k); }));
+      }).catch(function(){}));
+    }
+    Promise.all(steps).then(reload, reload);
+    setTimeout(reload, 4000);   // safety: reload even if a step hangs
+  };
 })();
 </script>
 </body>
