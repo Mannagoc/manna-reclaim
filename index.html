@@ -282,6 +282,12 @@
   .btn.ghost{ background:#1d1a13; color:var(--ink-dim); }
   .btn.danger{ background:#2a130f; color:var(--err); border-color:#5a2620; }
   .btn.block{ width:100%; padding:14px; font-size:14px; }
+  .btn:disabled, .btn.is-off{ opacity:.4; pointer-events:none; cursor:not-allowed; }
+  /* inline validation warning inside sheets */
+  .formwarn{ display:none; margin:2px 0 4px; background:#2c1816; border:1px solid #5a2c1d; color:#f0b3ab;
+    border-radius:9px; padding:9px 12px; font-size:12.5px; line-height:1.45; }
+  .formwarn.show{ display:block; }
+  .formwarn b{ color:var(--err); }
 
   /* history */
   table.hist{ width:100%; border-collapse:collapse; font-size:12.5px; }
@@ -1538,9 +1544,22 @@
       '<div class="field-inline">'+
         '<div class="field"><label>Supervisor</label><select id="bt-sup"><option value="">—</option>'+supOpts+'</select></div>'+
         '<div class="field"><label>Reading time <span class="muted" style="text-transform:none;letter-spacing:0">— blank = now</span></label><input id="bt-time" type="time"></div></div>'+
+      '<div class="formwarn" id="bt-warn"></div>'+
       '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button>'+
       '<button class="btn primary" id="bt-go">Log temperatures</button></div>');
+    function btValidate(){
+      var go=sheet.querySelector("#bt-go"), warn=sheet.querySelector("#bt-warn"), bad=[], any=false;
+      spec.positions.forEach(function(pos,i){
+        var raw=(sheet.querySelector("#bt-"+i).value||"").trim(); if(raw==="") return;
+        any=true; var v=num(sheet.querySelector("#bt-"+i).value);
+        if(v==null || v<=0) bad.push(pos);
+      });
+      if(bad.length){ warn.innerHTML="<b>Temperature:</b> "+label.toLowerCase()+" "+bad.join(", ")+" must be greater than zero."; warn.classList.add("show"); go.disabled=true; go.classList.add("is-off"); return false; }
+      warn.classList.remove("show"); go.disabled=false; go.classList.remove("is-off"); return any;
+    }
+    spec.positions.forEach(function(pos,i){ var el=sheet.querySelector("#bt-"+i); if(el) el.addEventListener("input",btValidate); });
     sheet.querySelector("#bt-go").addEventListener("click",function(){
+      if(!btValidate()){ toast("Enter a valid temperature above zero","warn"); return; }
       var temps=spec.positions.map(function(pos,i){ return { pos:pos, v:num(sheet.querySelector("#bt-"+i).value) }; });
       var sup=sheet.querySelector("#bt-sup").value||"";
       var tv=(sheet.querySelector("#bt-time")||{}).value||"";
@@ -2166,6 +2185,8 @@
       var efw=sheet.querySelector("#e-fw"); if(efw) r.firewoodKg=num(efw.value);
       var ekwh=sheet.querySelector("#e-kwh"); if(ekwh) r.kWh=num(ekwh.value);
       var ewt=sheet.querySelector("#e-wt"); if(ewt) r.weightKg=num(ewt.value);
+      var negs=[["Run time",r.runtimeMin],["Workers",r.workers],["Firewood",r.firewoodKg],["Energy",r.kWh],["Output weight",r.weightKg]];
+      for(var ni=0;ni<negs.length;ni++){ if(negs[ni][1]!=null && negs[ni][1]!=="" && num(negs[ni][1])<0){ toast(negs[ni][0]+" can't be negative","warn"); return; } }
       r.synced=false;                                   // re-push: upsert updates the DB row
       save(); closeSheet(); render();
       toast("Entry updated"+(syncTarget()?" — will re-sync":""),"ok");
@@ -2266,7 +2287,7 @@
       '<button class="btn ghost" data-act="export">Export CSV</button></div>'+
       '<div style="margin-top:8px"><button class="btn ghost block" data-act="resync">Re-send all data</button></div>'+
       '<div class="hint" style="margin-top:10px">"Re-send all" pushes every record again. It is safe — records update by id and won\'t duplicate. '+esc(storeNote)+'</div>'+
-      '<div class="hint" style="margin-top:6px;opacity:.7">Build: app v11 · sync v6 · supabase</div></div>'+
+      '<div class="hint" style="margin-top:6px;opacity:.7">Build: app v12 · sync v6 · supabase</div></div>'+
 
       '<div class="panel" style="margin-top:14px"><div class="sheet-label" style="margin:0 0 10px">Customers & selling price</div>'+
       ((state.settings.customers||[]).length
@@ -2341,6 +2362,9 @@
     });
     sheet.querySelector("#ss-go").addEventListener("click",function(){
       var dt=sheet.querySelector("#ss-date").value; if(!dt){ toast("Pick a date","warn"); return; }
+      var e0=sheet.querySelector("#ss-elec"), h0=sheet.querySelector("#ss-hour");
+      if(e0 && (e0.value||"").trim()!=="" && num(e0.value)<=0){ toast("Initial electricity reading must be greater than zero","warn"); return; }
+      if(h0 && (h0.value||"").trim()!=="" && num(h0.value)<=0){ toast("Initial hour-meter reading must be greater than zero","warn"); return; }
       startShiftMachine(mid, picks.shift, dt, picks.tyre, num(sheet.querySelector("#ss-elec").value), num(sheet.querySelector("#ss-hour").value));
     });
   }
@@ -2468,6 +2492,9 @@
       if(picks.quality==="Medium") src=[primNo].concat(extraNos);
       else if(picks.quality==="Fine" && extraNos.length) src=[primNo].concat(extraNos);
       src=src.filter(function(v,i){ return v && src.indexOf(v)===i; }).slice(0,4);
+      var e0=sheet.querySelector("#rf-elec"), h0=sheet.querySelector("#rf-hour");
+      if(e0 && (e0.value||"").trim()!=="" && num(e0.value)<=0){ toast("Initial electricity reading must be greater than zero","warn"); return; }
+      if(h0 && (h0.value||"").trim()!=="" && num(h0.value)<=0){ toast("Initial hour-meter reading must be greater than zero","warn"); return; }
       startRefiner(mid,picks.batchId,picks.quality,src,num(sheet.querySelector("#rf-elec").value),num(sheet.querySelector("#rf-hour").value)); });
     function checkGo(){ go.disabled=!(picks.batchId && (!m.needsQuality || picks.quality)); }
     function sel(group,one){ group.forEach(function(g){ g.classList.remove("sel"); }); one.classList.add("sel"); }
@@ -2510,10 +2537,40 @@
       '<div class="sheet-sub">'+subline+'</div>'+
       fields+hourField+
       (sw&&m.outWeight?'<div class="hint" style="margin-top:-4px">Output is weighed shiftwise in the Weigh tab after stopping.</div>':'')+
+      '<div class="formwarn" id="off-warn"></div>'+
       '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button>'+
       '<button class="btn primary" id="off-go">'+(m.kind==="autoclave"?"Log & unload":"Log run")+'</button></div>'+
       '<button class="btn danger block" id="off-cancelload" style="margin-top:10px">Cancel this load (entered by mistake)</button>');
+    // A meter reading can never go backwards, and anything that should be a positive
+    // quantity (energy used, hours run, output weight) can't be zero or negative.
+    // Validate live so the supervisor sees the problem before submitting.
+    function offValidate(){
+      var elec=sheet.querySelector("#f-elec"), hr=sheet.querySelector("#f-hour"), wt=sheet.querySelector("#f-wt");
+      var go=sheet.querySelector("#off-go"), warn=sheet.querySelector("#off-warn"), msgs=[];
+      if(elec){
+        var ev=(elec.value||"").trim();
+        if(ev!==""){ var fin=num(elec.value), es=(run.elecStart===""||run.elecStart==null)?null:num(run.elecStart);
+          if(fin<=0) msgs.push("<b>Electricity:</b> the final reading must be greater than zero.");
+          else if(es!=null && fin<es) msgs.push("<b>Electricity:</b> final reading ("+fin+") is below the start ("+es+") — a meter can't run backwards.");
+          else if(es!=null && fin===es) msgs.push("<b>Electricity:</b> the reading hasn't moved, so energy used would be zero.");
+        }
+      }
+      if(hr){
+        var hv=(hr.value||"").trim();
+        if(hv!==""){ var fh=num(hr.value), hsv=(hs==null?null:num(hs));
+          if(fh<=0) msgs.push("<b>Hour-meter:</b> the stop reading must be greater than zero.");
+          else if(hsv!=null && fh<hsv) msgs.push("<b>Hour-meter:</b> stop reading ("+fh+") is below the start ("+hsv+") — it can't go backwards.");
+          else if(hsv!=null && fh===hsv) msgs.push("<b>Hour-meter:</b> the reading hasn't moved, so run time would be zero.");
+        }
+      }
+      if(wt){ var wv=(wt.value||"").trim(); if(wv!==""){ var w=num(wt.value); if(w<=0) msgs.push("<b>Output weight:</b> must be greater than zero (leave blank to weigh later)."); } }
+      if(msgs.length){ warn.innerHTML=msgs.join("<br>"); warn.classList.add("show"); go.disabled=true; go.classList.add("is-off"); }
+      else { warn.classList.remove("show"); go.disabled=false; go.classList.remove("is-off"); }
+      return msgs.length===0;
+    }
+    ["#f-elec","#f-hour","#f-wt"].forEach(function(sel){ var el=sheet.querySelector(sel); if(el) el.addEventListener("input",offValidate); });
     sheet.querySelector("#off-go").addEventListener("click",function(){
+      if(!offValidate()){ toast("Check the highlighted readings before logging","warn"); return; }
       var f={};
       var elec=sheet.querySelector("#f-elec"), fw=sheet.querySelector("#f-fw"), wk=sheet.querySelector("#f-work"), wt=sheet.querySelector("#f-wt"), hr=sheet.querySelector("#f-hour");
       if(elec){
