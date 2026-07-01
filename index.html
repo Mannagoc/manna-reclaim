@@ -649,6 +649,7 @@
     var stray=state.runs.filter(function(r){ return r.batchId===id; });
     stray.forEach(function(r){ if(r.synced && syncTarget()==="supabase"){ state.pendingDeletes=state.pendingDeletes||[]; if(state.pendingDeletes.indexOf(r.id)<0) state.pendingDeletes.push(r.id); } });
     state.runs=state.runs.filter(function(r){ return r.batchId!==id; });
+    state.qualityTests=(state.qualityTests||[]).filter(function(q){ return !(q.kind==="batch" && String(q.batchNo)===String(b.no)); });   // drop this batch's QC rows
     state.batches=state.batches.filter(function(x){ return x.id!==id; });
     save(); closeSheet(); render(); toast("Batch "+b.no+" deleted","ok"); scheduleAutoSync(400); }
   function batch(id){ for(var i=0;i<state.batches.length;i++) if(state.batches[i].id===id) return state.batches[i]; return null; }
@@ -1959,7 +1960,7 @@
   }
 
   function viewQuality(){
-    var batches=(state.batches||[]).slice().sort(function(a,b){ return (b.startedAt||0)-(a.startedAt||0); });
+    var batches=(state.batches||[]).filter(function(b){ return !batchOrphaned(b); }).sort(function(a,b){ return (b.startedAt||0)-(a.startedAt||0); });
     var shifts=coarseShifts().sort(function(a,b){ return (b.ts||0)-(a.ts||0); });
     var head='<div class="view-head"><h1>Quality</h1><div class="meta">'+pendingQC()+' awaiting test</div></div>';
     if(!batches.length && !shifts.length)
@@ -1998,11 +1999,26 @@
   var QT=null;
   function openQcBatch(no){
     var b=null; for(var i=0;i<(state.batches||[]).length;i++) if(String(state.batches[i].no)===String(no)){ b=state.batches[i]; break; }
-    var grades=qcGradesFor(b), verdicts={};
-    grades.forEach(function(g){ var t=qcLatestBatchQ(no,g); verdicts[g]= t? t.verdict : null; });   // null = untested
-    var prev=qcLatestBatch(no);   // newest of any grade, used to pre-fill shared readings/report
-    QT={ kind:"batch", batchNo:no, label:"Batch "+no, sub:(b?b.formulation:"")||"", grades:grades, verdicts:verdicts,
-         params:(prev&&prev.params?JSON.parse(JSON.stringify(prev.params)):[]), tester:(prev?prev.tester:"")||"", notes:"",
+    var grades=qcGradesFor(b);
+    var rows=grades.map(function(g){
+      var t=qcLatestBatchQ(no,g);
+      var status = t ? (t.verdict==="hold"?'<b style="color:var(--err)">HOLD</b>':'<b style="color:var(--ok)">Passed</b>')+((t.params&&t.params.length)?' <span class="muted">· '+t.params.length+' reading'+(t.params.length>1?'s':'')+'</span>':' <span class="muted">· no readings</span>')
+                     : '<span class="muted">Untested</span>';
+      return '<button class="qgrow" data-qc-grade="'+esc(no)+'|'+esc(g)+'" style="width:100%;text-align:left;background:var(--panel2,#101820);border:1px solid var(--line);border-radius:11px;padding:11px 13px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;color:var(--ink)">'+
+        '<span><span class="qchip q-'+esc(g)+'" style="min-width:78px;display:inline-block;text-align:center">'+esc(g)+'</span></span>'+
+        '<span style="flex:1;font-size:13px">'+status+'</span><span style="color:var(--muted);font-size:18px">›</span></button>';
+    }).join("");
+    openSheet('<div class="sheet-h"><span class="led" style="background:radial-gradient(circle at 35% 30%,#bfe3ff,#3aa0ff)"></span><b>Batch '+esc(no)+'</b></div>'+
+      '<div class="sheet-sub">'+(b&&b.formulation?esc(b.formulation)+' · ':'')+'Each grade is tested separately — tap a grade to log its own parameters and verdict.</div>'+
+      rows+
+      '<div class="sheet-actions"><button class="btn ghost" data-act="close">Close</button></div>');
+    sheet.querySelectorAll("[data-qc-grade]").forEach(function(el){ el.addEventListener("click",function(){ var p=el.getAttribute("data-qc-grade").split("|"); openQcGrade(p[0],p[1]); }); });
+  }
+  function openQcGrade(no, grade){
+    var b=null; for(var i=0;i<(state.batches||[]).length;i++) if(String(state.batches[i].no)===String(no)){ b=state.batches[i]; break; }
+    var prev=qcLatestBatchQ(no,grade);
+    QT={ kind:"grade", batchNo:no, quality:grade, label:"Batch "+no+" · "+grade, sub:(b?b.formulation:"")||"",
+         params:(prev&&prev.params?JSON.parse(JSON.stringify(prev.params)):[]), verdict:(prev?prev.verdict:"pass"), tester:(prev?prev.tester:"")||"", notes:"",
          attachmentUrl:(prev&&prev.attachmentUrl)||"", attachmentName:(prev&&prev.attachmentName)||"", newFileDataUrl:null, newFileName:"", newFileType:"" };
     renderQcSheet();
   }
@@ -2015,7 +2031,7 @@
     renderQcSheet();
   }
   function renderQcSheet(){
-    var prev = QT.kind==="batch" ? qcLatestBatch(QT.batchNo) : qcLatestCoarse(QT.shiftDate,QT.shift);
+    var prev = QT.kind==="grade" ? qcLatestBatchQ(QT.batchNo,QT.quality) : qcLatestCoarse(QT.shiftDate,QT.shift);
     var paramsHtml = QT.params.length ? QT.params.map(function(p,i){
       return '<div class="weighrow"><span><b>'+esc(p.name)+'</b> · '+esc(p.value)+(p.unit?' '+esc(p.unit):'')+'</span>'+
         '<button class="wdel" data-qp-del="'+i+'" aria-label="remove">\u2715</button></div>';
@@ -2029,28 +2045,15 @@
     } else if(QT.attachmentUrl){
       attachHtml='<div class="weighrow"><span>Report: <a href="'+esc(QT.attachmentUrl)+'" target="_blank" rel="noopener" style="color:var(--elec)">view</a> <small class="muted">'+esc(QT.attachmentName||"")+'</small></span></div>';
     }
-    var verdictBlock;
-    if(QT.kind==="batch"){
-      verdictBlock='<div class="sheet-label" style="margin-top:16px">Verdict per grade</div>'+
-        '<div class="hint" style="margin:-2px 0 9px">Mark each grade Pass (fit) or Hold (unfit). Leave a grade as \u201c\u2014\u201d until it\u2019s tested.</div>'+
-        QT.grades.map(function(g){
-          var v=QT.verdicts[g];
-          return '<div class="qgrow"><span class="qchip q-'+esc(g)+'" style="min-width:80px;text-align:center">'+esc(g)+'</span>'+
-            '<button class="gbtn none'+(v==null?' sel':'')+'" data-qcg="'+esc(g)+'" data-qcv="">\u2014</button>'+
-            '<button class="gbtn pass'+(v==="pass"?' sel':'')+'" data-qcg="'+esc(g)+'" data-qcv="pass">Pass</button>'+
-            '<button class="gbtn hold'+(v==="hold"?' sel':'')+'" data-qcg="'+esc(g)+'" data-qcv="hold">Hold</button></div>';
-        }).join("");
-    } else {
-      verdictBlock='<div class="sheet-label" style="margin-top:16px">Verdict</div>'+
-        '<div style="display:flex;gap:8px;margin-bottom:6px">'+
-          '<button class="pick'+(QT.verdict!=="hold"?' sel':'')+'" data-qc-verdict="pass" style="flex:1"><b>Pass</b><small>fit for dispatch</small></button>'+
-          '<button class="pick'+(QT.verdict==="hold"?' sel':'')+'" data-qc-verdict="hold" style="flex:1"><b>Hold</b><small>unfit \u2014 warn dispatch</small></button>'+
-        '</div>';
-    }
+    var verdictBlock='<div class="sheet-label" style="margin-top:16px">Verdict</div>'+
+      '<div style="display:flex;gap:8px;margin-bottom:6px">'+
+        '<button class="pick'+(QT.verdict!=="hold"?' sel':'')+'" data-qc-verdict="pass" style="flex:1"><b>Pass</b><small>fit for dispatch</small></button>'+
+        '<button class="pick'+(QT.verdict==="hold"?' sel':'')+'" data-qc-verdict="hold" style="flex:1"><b>Hold</b><small>unfit \u2014 warn dispatch</small></button>'+
+      '</div>';
     openSheet('<div class="sheet-h"><span class="led" style="background:radial-gradient(circle at 35% 30%,#bfe3ff,#3aa0ff);box-shadow:0 0 10px 1px #3aa0ff"></span><b>'+esc(QT.label)+'</b></div>'+
-      '<div class="sheet-sub">'+(QT.sub?esc(QT.sub)+' · ':'')+(QT.kind==="batch"?'Give a Pass / Hold per grade.':'Log the lab results, then mark Pass or Hold.')+(prev?' Last: '+(prev.verdict==="hold"?'HOLD':'Passed')+' '+esc(fmtDate(prev.ts)):'')+'</div>'+
+      '<div class="sheet-sub">'+(QT.sub?esc(QT.sub)+' · ':'')+(QT.kind==="grade"?'Log this grade\u2019s test parameters, then mark Pass or Hold.':'Log the lab results, then mark Pass or Hold.')+(prev?' Last: '+(prev.verdict==="hold"?'HOLD':'Passed')+' '+esc(fmtDate(prev.ts)):'')+'</div>'+
       dl+
-      '<div class="sheet-label">Test readings <span class="muted" style="text-transform:none;letter-spacing:0">'+(QT.kind==="batch"?'— shared across grades, opt.':'opt.')+'</span></div>'+paramsHtml+
+      '<div class="sheet-label">Test readings <span class="muted" style="text-transform:none;letter-spacing:0">'+(QT.kind==="grade"?'\u2014 for this grade':'opt.')+'</span></div>'+paramsHtml+
       '<div class="field-inline" style="align-items:stretch;margin-top:6px"><div class="field" style="margin-bottom:0;flex:1.3"><label>Parameter</label><input id="qp-name" list="qc-names" type="text" autocomplete="off" placeholder="e.g. Mooney viscosity"></div>'+
         '<div class="field" style="margin-bottom:0"><label>Value</label><input id="qp-val" type="text" inputmode="decimal" placeholder="0"></div>'+
         '<div class="field" style="margin-bottom:0;flex:.7"><label>Unit</label><input id="qp-unit" type="text" autocomplete="off" placeholder="opt."></div>'+
@@ -2099,14 +2102,11 @@
     var keepUrl=(!newFile && QT.attachmentUrl)?QT.attachmentUrl:"";
     var keepName=(!newFile && QT.attachmentUrl)?(QT.attachmentName||""):"";
     var recs=[];
-    if(QT.kind==="batch"){
-      var chosen=QT.grades.filter(function(g){ return QT.verdicts[g]==="pass"||QT.verdicts[g]==="hold"; });
-      if(!chosen.length){ toast("Set Pass or Hold on at least one grade","warn"); return; }
-      chosen.forEach(function(g){
-        recs.push({ id:uid(), device:dev, ts:ts, kind:"batch", batchNo:QT.batchNo, quality:g,
-          shiftDate:null, shift:null, params:QT.params.slice(), verdict:QT.verdicts[g],
-          tester:QT.tester, notes:QT.notes, attachmentUrl:keepUrl, attachmentName:keepName, synced:false });
-      });
+    if(QT.kind==="grade"){
+      if(!QT.params.length && !QT.notes && !newFile && !QT.attachmentUrl){ toast("Add at least one test parameter for this grade","warn"); return; }
+      recs.push({ id:uid(), device:dev, ts:ts, kind:"batch", batchNo:QT.batchNo, quality:QT.quality,
+        shiftDate:null, shift:null, params:QT.params.slice(), verdict:(QT.verdict==="hold"?"hold":"pass"),
+        tester:QT.tester, notes:QT.notes, attachmentUrl:keepUrl, attachmentName:keepName, synced:false });
     } else {
       if(!QT.params.length && !QT.notes && !newFile && !QT.attachmentUrl){ toast("Add a reading, a note, or a report","warn"); return; }
       recs.push({ id:uid(), device:dev, ts:ts, kind:"coarse", batchNo:null, quality:"Coarse",
@@ -2420,7 +2420,7 @@
       '<div class="hint" style="margin-top:10px">"Re-send all" pushes every record again. It is safe — records update by id and won\'t duplicate. '+esc(storeNote)+'</div>'+
       '<div style="margin-top:12px"><button class="btn ghost block" data-act="force-update">↻ Update app to latest version</button></div>'+
       '<div class="hint" style="margin-top:8px;opacity:.85">Use this if the tablet is stuck on an old version. It clears the cache and reloads the newest code from the server (needs internet).</div>'+
-      '<div class="hint" style="margin-top:6px;opacity:.7">Build: app v23 · sync v6 · supabase</div></div>'+
+      '<div class="hint" style="margin-top:6px;opacity:.7">Build: app v24 · sync v6 · supabase</div></div>'+
 
       '<div class="panel" style="margin-top:14px"><div class="sheet-label" style="margin:0 0 10px">Customers & selling price</div>'+
       ((state.settings.customers||[]).length
