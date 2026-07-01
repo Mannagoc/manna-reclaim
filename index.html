@@ -637,6 +637,20 @@
       '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button>'+
       '<button class="btn primary" data-closebatch-go="'+b.id+'">Close batch</button></div>'); }
   function closeBatch(id){ var b=batch(id); if(!b) return; b.closed=true; save(); closeSheet(); render(); toast("Batch "+b.no+" closed","ok"); }
+  function batchInAC(b){ return MACHINES.some(function(mm){ return mm.kind==="autoclave" && state.machines[mm.id] && state.machines[mm.id].running && state.machines[mm.id].running.batchId===b.id; }); }
+  function batchOrphaned(b){ return state.runs.filter(function(r){ return r.batchId===b.id; }).length===0 && !batchInAC(b); }   // autoclave entry deleted (or never captured) & not currently loaded
+  function openDeleteBatchSheet(id){ var b=batch(id); if(!b){ closeSheet(); return; }
+    var stray=state.runs.filter(function(r){ return r.batchId===id; }).length;
+    openSheet('<div class="sheet-h"><span class="led" style="background:var(--err)"></span><b>Delete batch '+esc(b.no)+'?</b></div>'+
+      '<div class="sheet-sub">This batch has no autoclave entry'+(stray?' but still has '+stray+' linked run(s)':'')+'. Deleting removes it from the Batches list'+(stray?' and its '+stray+' linked run(s)':'')+'. This cannot be undone.</div>'+
+      '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button>'+
+      '<button class="btn danger" data-delbatch-go="'+b.id+'">Delete batch</button></div>'); }
+  function deleteBatch(id){ var b=batch(id); if(!b){ closeSheet(); return; }
+    var stray=state.runs.filter(function(r){ return r.batchId===id; });
+    stray.forEach(function(r){ if(r.synced && syncTarget()==="supabase"){ state.pendingDeletes=state.pendingDeletes||[]; if(state.pendingDeletes.indexOf(r.id)<0) state.pendingDeletes.push(r.id); } });
+    state.runs=state.runs.filter(function(r){ return r.batchId!==id; });
+    state.batches=state.batches.filter(function(x){ return x.id!==id; });
+    save(); closeSheet(); render(); toast("Batch "+b.no+" deleted","ok"); scheduleAutoSync(400); }
   function batch(id){ for(var i=0;i<state.batches.length;i++) if(state.batches[i].id===id) return state.batches[i]; return null; }
   function isComplete(r){ return r.machineId==="R4" ? (r.weightKg!=="" && r.weightKg!=null) : true; }
   function pendingWeigh(){ return state.runs.filter(function(r){ return (r.needsWeigh||r.machineId==="R4") && (r.weightKg===""||r.weightKg==null); }); }
@@ -1625,6 +1639,12 @@
     var preChip=pre.length?'<span class="formchip" style="color:var(--elec)">'+esc(pre.join(" · "))+'</span>':'';
     var hint='<div class="bhint">Tap a quality to mark it taken. Weigh each marked quality, then press Close batch to file it away.</div>';
     var ready=allTakenWeighed(b);
+    if(batchOrphaned(b)){
+      var delBtn='<button class="btn danger bclose" data-delbatch="'+b.id+'">⌫ Delete batch — no autoclave entry</button>';
+      return '<div class="bcard"><div class="bhead"><div class="l"><span class="batchref" style="font-size:16px">'+esc(b.no)+'</span>'+
+        srcChip+'<span class="formchip">'+esc(b.formulation)+'</span>'+preChip+'</div>'+state2+'</div>'+
+        '<div class="bhint" style="color:var(--amber)">The autoclave entry for this batch was deleted, so it is stranded here. You can remove it.</div>'+delBtn+'</div>';
+    }
     var closeBtn='<button class="btn '+(ready?"primary":"ghost")+' bclose" data-closebatch="'+b.id+'">'+
       (ready?"Close batch ▸":(nTaken?(nW+"/"+nTaken+" weighed"):"Mark qualities to close"))+'</button>';
     return '<div class="bcard"><div class="bhead"><div class="l"><span class="batchref" style="font-size:16px">'+esc(b.no)+'</span>'+
@@ -1654,16 +1674,25 @@
   /* ===================== dispatch ===================== */
   var SACK_KG=50;
   function customer(code){ var cs=state.settings.customers||[]; for(var i=0;i<cs.length;i++) if(cs[i].code===code) return cs[i]; return null; }
-  function weighedRuns(){ return state.runs.filter(function(r){ return r.machineId==="R4" && r.quality && r.weightKg!==""&&r.weightKg!=null && parseFloat(r.weightKg)>0; }); }
+  function weighedRuns(){ return state.runs.filter(function(r){
+    var hasW = r.weightKg!==""&&r.weightKg!=null && parseFloat(r.weightKg)>0;
+    if(!hasW) return false;
+    if(r.machineId==="R4" && r.quality) return true;          // special line (R4)
+    if(r.line==="coarse" && r.shiftwise) return true;         // coarse line shift output packs too
+    return false;
+  }); }
+  function gradeOf(r){ return r.quality || (r.line==="coarse" ? "Coarse" : ""); }
+  function packRef(r){ var b=batch(r.batchId); if(b) return b.no; if(r.line==="coarse") return fmtDay(r.shiftDate); return "—"; }
+  function packSubtitle(r){ var b=batch(r.batchId); if(b) return b.formulation||""; if(r.line==="coarse") return (r.shift||"")+"-Shift"; return ""; }
   function packedSacksOf(r){ return parseFloat(r.packedSacks)||0; }
   function packedKgOf(r){ return packedSacksOf(r)*SACK_KG; }
   function leftoutBal(q){ return Math.round((((state.leftout&&state.leftout[q])||0))*100)/100; }
-  function carriedIn(r){ return r.leftoutIn!=null ? (parseFloat(r.leftoutIn)||0) : leftoutBal(r.quality); }   // prospective until finalised
+  function carriedIn(r){ return r.leftoutIn!=null ? (parseFloat(r.leftoutIn)||0) : leftoutBal(gradeOf(r)); }   // prospective until finalised
   function packTotalOf(r){ return Math.round(((parseFloat(r.weightKg)||0)+carriedIn(r))*100)/100; }
   function fullyPacked(r){ if(r.packedSacks==null) return false; return (packTotalOf(r) - packedKgOf(r)) < SACK_KG; }
   function sacksNeeded(r){ return Math.max(0, Math.floor(packTotalOf(r)/SACK_KG)); }
   function dispatchedSacksFor(batchId,quality){ var t=0; (state.dispatches||[]).forEach(function(d){ if(d.batchId===batchId && (d.quality||"")===(quality||"")) t+=parseFloat(d.sacks)||0; }); return t; }
-  function availSacksOf(r){ return packedSacksOf(r) - dispatchedSacksFor(r.batchId, r.quality); }
+  function availSacksOf(r){ return packedSacksOf(r) - dispatchedSacksFor(r.batchId, gradeOf(r)); }
   function pendingPack(){ return weighedRuns().filter(function(r){ return !fullyPacked(r); }); }
   function dispatchableQ(){ return weighedRuns().filter(function(r){ return fullyPacked(r) && availSacksOf(r)>0; }); }
   function dispatchesFor(batchId){ return (state.dispatches||[]).filter(function(d){ return d.batchId===batchId; }); }
@@ -1679,13 +1708,15 @@
       var b=batch(r.batchId); var w=parseFloat(r.weightKg)||0, ci=carriedIn(r), total=packTotalOf(r), ps=packedSacksOf(r), need=sacksNeeded(r);
       var prog = ps>0 ? '<small style="color:var(--elec)">'+ps+' sacks packed · '+Math.round((total-ps*SACK_KG)*100)/100+' kg left out</small>'
                       : '<small>weighed '+w+' kg'+(ci>0?' + '+ci+' carried = '+total+' kg':'')+' · ≈ '+need+' sacks</small>';
-      return '<div class="wcard"><div class="info"><div class="row1"><span class="batchref">'+esc(b?b.no:'?')+'</span>'+qchip(r.quality)+'<span class="formchip">'+esc(b?b.formulation:'')+'</span></div>'+prog+'</div>'+
+      var gradeChip = r.quality ? qchip(r.quality) : '<span class="qchip shift" style="background:var(--ember)">Coarse</span>';
+      return '<div class="wcard"><div class="info"><div class="row1"><span class="batchref">'+esc(packRef(r))+'</span>'+gradeChip+'<span class="formchip">'+esc(packSubtitle(r))+'</span></div>'+prog+'</div>'+
         '<button class="btn primary" data-pack="'+r.id+'">'+(ps>0?'Update ▸':'Pack ▸')+'</button></div>';
     }).join("");
     return '<div class="view-head"><h1>Packing</h1><div class="meta">'+p.length+' to pack</div></div><div class="stack">'+cards+'</div>';
   }
   function openPackSheet(runId){
     var r=weighRow(runId); if(!r) return; var b=batch(r.batchId);
+    var q=gradeOf(r), refName=packRef(r);
     var w=parseFloat(r.weightKg)||0, ci=carriedIn(r), total=packTotalOf(r), ps=packedSacksOf(r), need=sacksNeeded(r);
     var carryNote = ci>0 ? '<div class="ro" style="margin-bottom:10px"><span class="k">Carried in from last batch</span><span class="v" style="color:var(--elec)">+'+ci+' kg</span></div>' : '';
     var willLeave = Math.round((total - need*SACK_KG)*100)/100;
@@ -1693,12 +1724,12 @@
     var convBox = isSpecial ? '<div class="sheet-label" style="margin-top:16px">Convert Special → SuperFine</div>'+
       '<div class="field-inline" style="align-items:stretch"><div class="field" style="flex:2;margin-bottom:0"><div class="num-suffix"><input id="pk-conv" type="number" inputmode="decimal" placeholder="0"><span class="sfx">kg</span></div></div>'+
       '<button class="btn" id="pk-conv-go" style="flex:1;border-color:#7a5a1f;color:var(--amber)">→ SuperFine</button></div>'+
-      '<div class="hint" style="margin-top:-4px">Moves this many kg — and its processing cost — to SuperFine of '+esc(b?b.no:'')+'. The Special weight here drops by the same amount.</div>' : '';
-    openSheet('<div class="sheet-h"><span class="led" style="background:var(--elec)"></span><b>Pack '+esc(b?b.no:'')+' · '+esc(r.quality)+'</b></div>'+
+      '<div class="hint" style="margin-top:-4px">Moves this many kg — and its processing cost — to SuperFine of '+esc(refName)+'. The Special weight here drops by the same amount.</div>' : '';
+    openSheet('<div class="sheet-h"><span class="led" style="background:var(--elec)"></span><b>Pack '+esc(refName)+' · '+esc(q)+'</b></div>'+
       '<div class="sheet-sub">Weighed '+w+' kg'+(ci>0?' + '+ci+' kg carried = '+total+' kg':'')+' · '+SACK_KG+' kg per sack.</div>'+
       carryNote+
       '<div class="ro" style="margin-bottom:10px"><span class="k">Full sacks</span><span class="v">'+need+' sacks · '+(need*SACK_KG)+' kg</span></div>'+
-      '<div class="ro" style="margin-bottom:14px"><span class="k">Left out → next '+esc(r.quality)+' batch</span><span class="v" style="color:var(--amber)">'+willLeave+' kg</span></div>'+
+      '<div class="ro" style="margin-bottom:14px"><span class="k">Left out → next '+esc(q)+' batch</span><span class="v" style="color:var(--amber)">'+willLeave+' kg</span></div>'+
       '<div class="field"><label>Sacks packed</label><input id="pk-s" type="number" inputmode="numeric" value="'+(ps||need||"")+'" placeholder="'+need+'"></div>'+
       convBox+
       '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button>'+
@@ -1707,7 +1738,7 @@
     if(isSpecial){ var cg=sheet.querySelector("#pk-conv-go"); if(cg) cg.addEventListener("click",function(){ convertAtPack(runId, num(sheet.querySelector("#pk-conv").value)); }); }
   }
   function setPacked(runId, sacks){
-    var r=weighRow(runId); if(!r) return; var b=batch(r.batchId); var q=r.quality||"";
+    var r=weighRow(runId); if(!r) return; var b=batch(r.batchId); var q=gradeOf(r);
     if(sacks==null||sacks<0){ toast("Enter the sacks packed","warn"); return; }
     if(r.leftoutIn==null) r.leftoutIn=leftoutBal(q);     // claim the carried-in remainder once
     var total=Math.round(((parseFloat(r.weightKg)||0)+(parseFloat(r.leftoutIn)||0))*100)/100;
@@ -1717,7 +1748,7 @@
     if(!state.leftout) state.leftout={};
     state.leftout[q]=leftoutOut;                          // carry to the next batch of this quality
     save(); closeSheet(); render();
-    if(fullyPacked(r)) toast(b.no+" · "+q+" packed · "+leftoutOut+" kg carried forward","ok");
+    if(fullyPacked(r)) toast(packRef(r)+" · "+q+" packed · "+leftoutOut+" kg carried forward","ok");
     else toast("Saved "+sacks+" sacks · "+leftoutOut+" kg still to pack","ok");
   }
 
@@ -2389,7 +2420,7 @@
       '<div class="hint" style="margin-top:10px">"Re-send all" pushes every record again. It is safe — records update by id and won\'t duplicate. '+esc(storeNote)+'</div>'+
       '<div style="margin-top:12px"><button class="btn ghost block" data-act="force-update">↻ Update app to latest version</button></div>'+
       '<div class="hint" style="margin-top:8px;opacity:.85">Use this if the tablet is stuck on an old version. It clears the cache and reloads the newest code from the server (needs internet).</div>'+
-      '<div class="hint" style="margin-top:6px;opacity:.7">Build: app v21 · sync v6 · supabase</div></div>'+
+      '<div class="hint" style="margin-top:6px;opacity:.7">Build: app v22 · sync v6 · supabase</div></div>'+
 
       '<div class="panel" style="margin-top:14px"><div class="sheet-label" style="margin:0 0 10px">Customers & selling price</div>'+
       ((state.settings.customers||[]).length
@@ -2893,6 +2924,8 @@
     if((t=e.target.closest("[data-qtake]"))){ var qt=t.getAttribute("data-qtake").split("|"); markTaken(qt[0],qt[1]); return; }
     if((t=e.target.closest("[data-closebatch-go]"))){ closeBatch(t.getAttribute("data-closebatch-go")); return; }
     if((t=e.target.closest("[data-closebatch]"))){ openCloseConfirm(t.getAttribute("data-closebatch")); return; }
+    if((t=e.target.closest("[data-delbatch-go]"))){ deleteBatch(t.getAttribute("data-delbatch-go")); return; }
+    if((t=e.target.closest("[data-delbatch]"))){ openDeleteBatchSheet(t.getAttribute("data-delbatch")); return; }
     if((t=e.target.closest("[data-liveweigh]"))){ openLiveWeighSheet(t.getAttribute("data-liveweigh")); return; }
     if((t=e.target.closest("[data-bearings]"))){ openBearingSheet(t.getAttribute("data-bearings")); return; }
     if((t=e.target.closest("[data-bearings-any]"))){ var dm=dueMachines()[0]; if(dm) openBearingSheet(dm.id); return; }
