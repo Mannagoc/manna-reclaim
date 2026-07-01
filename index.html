@@ -1558,7 +1558,7 @@
       dueNote+rows+
       '<div class="field-inline">'+
         '<div class="field"><label>Supervisor</label><select id="bt-sup"><option value="">—</option>'+supOpts+'</select></div>'+
-        '<div class="field"><label>Date</label><input id="bt-date" type="date" value="'+todayISO()+'"></div></div>'+
+        '<div class="field"><label>Date</label><input id="bt-date" type="date" value=""></div></div>'+
       '<div class="field"><label>Reading time <span class="muted" style="text-transform:none;letter-spacing:0">— blank = now</span></label><input id="bt-time" type="time"></div>'+
       '<div class="formwarn" id="bt-warn"></div>'+
       '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button>'+
@@ -1578,7 +1578,7 @@
       if(!btValidate()){ toast("Enter a valid temperature above zero","warn"); return; }
       var temps=spec.positions.map(function(pos,i){ return { pos:pos, v:num(sheet.querySelector("#bt-"+i).value) }; });
       var sup=sheet.querySelector("#bt-sup").value||"";
-      var dv=(sheet.querySelector("#bt-date")||{}).value||todayISO();
+      var dv=(sheet.querySelector("#bt-date")||{}).value||""; if(!dv){ toast("Pick a date","warn"); return; }
       var tv=(sheet.querySelector("#bt-time")||{}).value||"";
       var recordedAt;
       if(tv){ var ms=Date.parse(dv+"T"+tv); recordedAt=isNaN(ms)?Date.now():ms; }
@@ -2420,7 +2420,7 @@
       '<div class="hint" style="margin-top:10px">"Re-send all" pushes every record again. It is safe — records update by id and won\'t duplicate. '+esc(storeNote)+'</div>'+
       '<div style="margin-top:12px"><button class="btn ghost block" data-act="force-update">↻ Update app to latest version</button></div>'+
       '<div class="hint" style="margin-top:8px;opacity:.85">Use this if the tablet is stuck on an old version. It clears the cache and reloads the newest code from the server (needs internet).</div>'+
-      '<div class="hint" style="margin-top:6px;opacity:.7">Build: app v22 · sync v6 · supabase</div></div>'+
+      '<div class="hint" style="margin-top:6px;opacity:.7">Build: app v23 · sync v6 · supabase</div></div>'+
 
       '<div class="panel" style="margin-top:14px"><div class="sheet-label" style="margin:0 0 10px">Customers & selling price</div>'+
       ((state.settings.customers||[]).length
@@ -2496,7 +2496,7 @@
     }
     openSheet('<div class="sheet-h"><span class="led" style="background:radial-gradient(circle at 35% 30%,'+ledA+','+ledB+');box-shadow:0 0 9px 1px '+ledB+'"></span><b>Start '+esc(m.name)+'</b></div>'+
       '<div class="sheet-sub">'+(grind?'Grinding line':'Coarse line')+' — pick the shift it is running for. Units &amp; crew at stop'+(m.outWeight?'; output weighed shiftwise.':'.')+'</div>'+
-      '<div class="sheet-label">Date</div><div class="field" style="margin-bottom:0"><input id="ss-date" type="date" value="'+d.date+'"></div>'+
+      '<div class="sheet-label">Date</div><div class="field" style="margin-bottom:0"><input id="ss-date" type="date" value=""></div>'+
       '<div class="sheet-label">Shift</div><div class="pickgrid">'+shiftBtns+'</div>'+
       tyreBlock+
       '<div class="field"><label>Initial electricity reading'+(preElec!==""?' <span class="muted" style="text-transform:none;letter-spacing:0">— last end '+preElec+'</span>':' <span class="muted" style="text-transform:none;letter-spacing:0">— meter units now</span>')+'</label><div class="num-suffix"><input id="ss-elec" type="number" inputmode="decimal" placeholder="meter reading" value="'+preElec+'"><span class="sfx">units</span></div></div>'+
@@ -2542,12 +2542,12 @@
         '<div class="field" style="margin-bottom:0"><input id="ac-batch" type="text" inputmode="numeric" autocomplete="off" placeholder="e.g. 2893"></div>'+
         '<div class="sheet-label">Loaded</div><div class="pickgrid">'+pairBtns+'</div>'+
         '<div class="sheet-label">Shift date <span class="muted" style="text-transform:none;letter-spacing:0">— the night shift keeps its start date</span></div>'+
-        '<div class="field" style="margin-bottom:0"><input id="ac-sdate" type="date" value="'+d.date+'"></div></div>'+
+        '<div class="field" style="margin-bottom:0"><input id="ac-sdate" type="date" value=""></div></div>'+
       '<div id="ac-coarse" style="'+(specialMode?'display:none':'')+'">'+
         '<div class="sheet-label">Coarse batch number</div>'+
         '<div class="field" style="margin-bottom:0"><input id="ac-cbatch" type="text" inputmode="numeric" autocomplete="off" placeholder="e.g. C-2893"></div>'+
         '<div class="sheet-label">Shift date</div>'+
-        '<div class="field" style="margin-bottom:0"><input id="ac-date" type="date" value="'+d.date+'"></div></div>'+
+        '<div class="field" style="margin-bottom:0"><input id="ac-date" type="date" value=""></div></div>'+
       '<div class="field" style="margin-top:14px"><label>Loading time <span class="muted" style="text-transform:none;letter-spacing:0">— leave blank to start the timer now</span></label><input id="ac-loadtime" type="time"></div>'+
       '<div class="hint" id="ac-shiftnote" style="margin-top:-4px">Shift: <b>'+esc(d.shift)+'</b> <span class="muted" style="text-transform:none;letter-spacing:0">— taken from the loading time</span></div>'+
       '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button>'+
@@ -2616,7 +2616,7 @@
       '<div class="sheet-label">Batch</div><div class="pickgrid">'+batchBtns+'</div>'+qBtns+
       '<div id="mixbox" style="display:none"><div class="sheet-label" style="margin-top:14px">Mixed from <span class="muted" style="text-transform:none;letter-spacing:0">— add tailings of other batches</span></div><div class="pickgrid" id="mixgrid"></div></div>'+
       '<div class="field-inline" style="margin-top:14px">'+
-        '<div class="field"><label>Date</label><input id="rf-date" type="date" value="'+todayISO()+'"></div>'+
+        '<div class="field"><label>Date</label><input id="rf-date" type="date" value=""></div>'+
         '<div class="field"><label>Shift</label><select id="rf-shift"><option value="Day"'+(autoShift()==="Day"?" selected":"")+'>Day</option><option value="Night"'+(autoShift()==="Night"?" selected":"")+'>Night</option></select></div></div>'+
       '<div class="field"><label>Initial electricity reading'+(preElec!==""?' <span class="muted" style="text-transform:none;letter-spacing:0">— last end '+preElec+'</span>':' <span class="muted" style="text-transform:none;letter-spacing:0">— meter units now</span>')+'</label><div class="num-suffix"><input id="rf-elec" type="number" inputmode="decimal" placeholder="meter reading" value="'+preElec+'"><span class="sfx">units</span></div></div>'+
       '<div class="field"><label>Hour-meter reading at start'+(preHour!==""?' <span class="muted" style="text-transform:none;letter-spacing:0">— last end '+preHour+'</span>':'')+'</label><div class="num-suffix"><input id="rf-hour" type="number" inputmode="decimal" placeholder="hour meter now" value="'+preHour+'"><span class="sfx">hrs</span></div></div>'+
@@ -2696,7 +2696,7 @@
     if(m.kind==="autoclave"){
       var loadedAtV=run.loadedAt||run.segStart||null;
       var loadDateV=run.shiftDate||todayISO();
-      hourField='<div class="field"><label>Discharge date <span class="muted" style="text-transform:none;letter-spacing:0">— loaded '+esc(fmtDay(loadDateV))+'</span></label><input id="f-udate" type="date" value="'+todayISO()+'"></div>'+
+      hourField='<div class="field"><label>Discharge date <span class="muted" style="text-transform:none;letter-spacing:0">— loaded '+esc(fmtDay(loadDateV))+'</span></label><input id="f-udate" type="date" value=""></div>'+
         '<div class="field"><label>Unloading time <span class="muted" style="text-transform:none;letter-spacing:0">— loaded '+(loadedAtV?fmtClock(loadedAtV):"—")+'; blank = now</span></label><input id="f-unload" type="time"></div>';
     } else {
       hourField='<div class="field"><label>Hour-meter reading at stop'+(hs!=null?' <span class="muted" style="text-transform:none;letter-spacing:0">— started at '+hs+'</span>':'')+'</label><div class="num-suffix"><input id="f-hour" type="number" inputmode="decimal" placeholder="hour meter now"><span class="sfx">hrs</span></div><div class="diffout" id="hour-diff"></div></div>';
@@ -2776,7 +2776,8 @@
       if(m.kind==="autoclave"){
         var loadedAt=run.loadedAt||run.segStart||Date.now();
         var unl=sheet.querySelector("#f-unload"), ut=unl?(unl.value||""):"";
-        var udEl=sheet.querySelector("#f-udate"), ud=udEl?(udEl.value||todayISO()):todayISO();
+        var udEl=sheet.querySelector("#f-udate"), ud=udEl?(udEl.value||""):"";
+        if(!ud){ toast("Pick the discharge date","warn"); return; }
         var unloadedAt;
         if(ut){ var ms=Date.parse(ud+"T"+ut); unloadedAt=isNaN(ms)?Date.now():ms; }
         else { unloadedAt=(ud===todayISO())?Date.now():(Date.parse(ud+"T12:00")||Date.now()); }
