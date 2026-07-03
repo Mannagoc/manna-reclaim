@@ -882,33 +882,8 @@
     var b=batch(run.batchId);
     var sv=srcVals(run.sourceBatches);
     if(m.id==="R4" && run.quality && b){ b.qualities=b.qualities||[]; if(b.qualities.indexOf(run.quality)<0) b.qualities.push(run.quality); }
-    // Re-run of the same batch + quality on the same machine IN THE SAME shift+date -> add into that row (a pass).
-    // Different day or shift stays a separate entry.
-    var existing=null;
-    var runSD=(run.shiftDate||curShift().date), runSH=(run.shift||curShift().name);
-    for(var i=0;i<state.runs.length;i++){ var r=state.runs[i];
-      if(!r.shiftwise && r.machineId===m.id && r.batchId===b.id && (r.quality||"")===(run.quality||"")
-         && (r.shiftDate||"")===runSD && (r.shift||"")===runSH){ existing=r; break; } }
-    if(existing){
-      existing.kWh=addNum(existing.kWh, fields.kWh);
-      existing.firewoodKg=addNum(existing.firewoodKg, fields.firewoodKg);
-      existing.workers=maxNum(existing.workers, fields.workers);
-      existing.runtimeMin=Math.round(((parseFloat(existing.runtimeMin)||0)+runtimeMin)*100)/100;
-      existing.hoursRun=Math.round((existing.runtimeMin/60)*100)/100;
-      existing.passes=(existing.passes||1)+1;
-      existing.end=end; existing.synced=false;
-      if(fields.elecEnd!=null) existing.elecEnd=fields.elecEnd;
-      if((existing.elecStart==null||existing.elecStart==="")&&fields.elecStart!=null) existing.elecStart=fields.elecStart;
-      if(hEnd!=null) existing.hourEnd=hEnd;
-      if((existing.hourStart==null||existing.hourStart==="")&&hStart!=null) existing.hourStart=hStart;
-      existing.src1=sv.src1; existing.src2=sv.src2; existing.src3=sv.src3; existing.src4=sv.src4;
-      if(fields.weightKg!=null && (existing.weightKg===""||existing.weightKg==null)) existing.weightKg=fields.weightKg;
-      state.machines[mid].running=null; postStatus(mid,"idle");
-      if(m.kind==="autoclave") b.autoclaveDone=true;
-      save(); closeSheet(); render();
-      toast(m.short+" added to "+b.no+(run.quality?" · "+run.quality:"")+" (pass "+existing.passes+")","ok");
-      return;
-    }
+    // Every stop is logged as its OWN row (no auto-merge), so a genuine double entry stays visible
+    // as two separate rows in History for the supervisor to compare and delete the wrong one.
     var row={
       id:uid(), device:state.settings.device||"", machine:m.name, machineId:m.id, short:m.short, kind:m.kind, line:"special",
       batchId:b.id, batchNo:b.no, capacity:b.capacity, formulation:b.formulation,
@@ -2257,6 +2232,11 @@
         '<br><span class="muted">'+fr.length+' run'+(fr.length===1?'':'s')+' · '+fmtDur(totRun)+' total'+(totWt>0?' · '+Math.round(totWt)+' kg':'')+(Object.keys(qset).length?' · '+Object.keys(qset).join(", "):'')+'</span></div>';
     }
 
+    // Duplicate detection: non-shiftwise rows sharing machine+batch+quality+shift-date+shift are potential double entries.
+    function dupKey(r){ return r.shiftwise ? null : (r.machineId+"|"+(r.batchNo||"")+"|"+(r.quality||"")+"|"+(r.shiftDate||"")+"|"+(r.shift||"")); }
+    var dupCount={}, dupSeen={};
+    fr.forEach(function(r){ var k=dupKey(r); if(k) dupCount[k]=(dupCount[k]||0)+1; });
+
     var body=fr.map(function(r){
       var shiftwise=!!r.shiftwise, isAuto=(r.kind==="autoclave")||r.loadedAt!=null;
       var ep=[];
@@ -2275,7 +2255,10 @@
       var mlabel = r.short || shortName(r.machineId);
       var sup = r.supervisor ? esc(r.supervisor) : '<span class="muted">—</span>';
       var when = esc(fmtDay(runDate(r)))+(r.shift?' · '+esc(r.shift):'');
-      var dup = (r.passes||1)>1 ? ' <span style="color:var(--err);font-weight:700;font-size:10px">⚠ '+r.passes+' entries</span>' : '';
+      var dk=dupKey(r), dup="";
+      if(dk && dupCount[dk]>1){ dupSeen[dk]=(dupSeen[dk]||0)+1; dup=' <span style="color:var(--err);font-weight:700;font-size:10px">⚠ duplicate '+dupSeen[dk]+' of '+dupCount[dk]+'</span>'; }
+      else if(!shiftwise && (r.passes||1)>1){ dup=' <span style="color:var(--err);font-weight:700;font-size:10px">⚠ merged '+r.passes+' entries</span>'; }
+      else if(shiftwise && (r.passes||1)>1){ dup=' <span class="muted" style="font-size:10px">'+r.passes+' segments</span>'; }
       var runCell = fmtHrs(r.runtimeMin);
       var hasHour=(r.hourStart!==""&&r.hourStart!=null)||(r.hourEnd!==""&&r.hourEnd!=null);
       if(!isAuto && hasHour){ runCell += '<br><span class="muted" style="font-size:10px">hr '+esc(r.hourStart!==""&&r.hourStart!=null?r.hourStart:'—')+' → '+esc(r.hourEnd!==""&&r.hourEnd!=null?r.hourEnd:'—')+'</span>'; }
@@ -2492,7 +2475,7 @@
       '<div class="hint" style="margin-top:10px">"Re-send all" pushes every record again. It is safe — records update by id and won\'t duplicate. '+esc(storeNote)+'</div>'+
       '<div style="margin-top:12px"><button class="btn ghost block" data-act="force-update">↻ Update app to latest version</button></div>'+
       '<div class="hint" style="margin-top:8px;opacity:.85">Use this if the tablet is stuck on an old version. It clears the cache and reloads the newest code from the server (needs internet).</div>'+
-      '<div class="hint" style="margin-top:6px;opacity:.7">Build: app v26 · sync v6 · supabase</div></div>'+
+      '<div class="hint" style="margin-top:6px;opacity:.7">Build: app v27 · sync v6 · supabase</div></div>'+
 
       '<div class="panel" style="margin-top:14px"><div class="sheet-label" style="margin:0 0 10px">Customers & selling price</div>'+
       ((state.settings.customers||[]).length
