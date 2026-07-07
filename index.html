@@ -405,6 +405,22 @@
   .muted{ color:var(--ink-faint); }
   .hr{ height:1px; background:var(--line); margin:16px 0; border:none; }
   @media (prefers-reduced-motion: reduce){ *{ animation:none !important; transition:none !important; } }
+  #login{ position:fixed; inset:0; z-index:200; background:linear-gradient(180deg,#0c1116,#0f1720); display:none; flex-direction:column; align-items:center; justify-content:flex-start; padding:36px 18px 40px; overflow:auto; }
+  #login .lcard{ width:100%; max-width:420px; }
+  #login h2{ font-size:19px; margin:18px 0 3px; text-align:center; }
+  #login .lsub{ text-align:center; color:var(--muted); font-size:13px; margin-bottom:20px; }
+  #login .agrid{ display:grid; grid-template-columns:1fr 1fr; gap:9px; }
+  #login .acct{ background:var(--panel2,#101820); border:1px solid var(--line); border-radius:12px; padding:13px 12px; text-align:left; cursor:pointer; color:var(--ink); }
+  #login .acct.sel{ border-color:var(--elec); box-shadow:0 0 0 1px var(--elec) inset; }
+  #login .acct b{ display:block; font-size:15px; }
+  #login .acct small{ color:var(--muted); font-size:11px; }
+  #login .acct .rl{ display:inline-block; margin-top:4px; font-size:10px; padding:1px 7px; border-radius:999px; border:1px solid var(--line); color:var(--ink-dim,#9fb0bf); text-transform:uppercase; letter-spacing:.4px; }
+  #login .pinwrap{ margin-top:18px; }
+  #login .pinwrap input{ width:100%; text-align:center; letter-spacing:8px; font-size:22px; padding:13px; background:#0e151b; border:1px solid var(--line); border-radius:11px; color:var(--ink); }
+  #login .lerr{ color:var(--err); font-size:13px; text-align:center; margin-top:12px; min-height:18px; }
+  #login .lbtn{ width:100%; margin-top:14px; background:var(--accent,#7fb1d8); color:#08222e; border:none; border-radius:11px; padding:14px; font-size:15px; font-weight:700; cursor:pointer; }
+  #login .lbtn[disabled]{ opacity:.5; }
+  #login .lnote{ text-align:center; color:var(--muted); font-size:11px; margin-top:16px; line-height:1.5; }
 </style>
 </head>
 <body>
@@ -423,6 +439,7 @@
 </div>
 
 <nav class="tabs" id="tabs"></nav>
+<div id="login"></div>
 
 <div id="scrim"></div>
 <div id="sheet" role="dialog" aria-modal="true"></div>
@@ -540,6 +557,103 @@
       headers:{ "apikey":key, "Authorization":"Bearer "+key, "Content-Type":"application/json", "Prefer":"resolution=merge-duplicates,return=minimal" },
       body:JSON.stringify([{ id:c.date+"|"+c.name, shift_date:c.date, shift:c.name, supervisor:c.supervisor, updated_at:new Date().toISOString() }]) }).catch(function(){}); }catch(e){}
   }
+  /* ============================ LOGIN / ROLES ============================ */
+  var ACCOUNTS=[
+    {user:"Mathai",   role:"supervisor", name:"Mathai"},
+    {user:"Rahul",    role:"supervisor", name:"Rahul"},
+    {user:"Devanand", role:"supervisor", name:"Devanand"},
+    {user:"QC",       role:"qc",         name:"Quality"},
+    {user:"Manager",  role:"manager",    name:"Manager"},
+    {user:"Admin",    role:"admin",      name:"Admin"}
+  ];
+  var DEFAULT_PINS={ Mathai:"1111", Rahul:"2222", Devanand:"3333", QC:"4444", Manager:"5555", Admin:"9999" };
+  function acct(user){ for(var i=0;i<ACCOUNTS.length;i++) if(ACCOUNTS[i].user===user) return ACCOUNTS[i]; return null; }
+  function pinFor(user){ var p=(state.settings&&state.settings.pins)||{}; return (p[user]!=null&&p[user]!=="")?String(p[user]):(DEFAULT_PINS[user]||""); }
+  function roleLabel(r){ return r==="supervisor"?"Supervisor":r==="qc"?"Quality (QC)":r==="manager"?"Manager":r==="admin"?"Admin":""; }
+  var AUTH_KEY="rrp_auth_v1", authMem=null;
+  function getAuth(){ if(authMem) return authMem; try{ var s=localStorage.getItem(AUTH_KEY); if(s){ authMem=JSON.parse(s); return authMem; } }catch(e){} return null; }
+  function setAuth(a){ authMem=a; try{ if(a) localStorage.setItem(AUTH_KEY,JSON.stringify(a)); else localStorage.removeItem(AUTH_KEY); }catch(e){} }
+  function authRole(){ var a=getAuth(); return a?a.role:null; }
+  function deviceId(){ return ((state.settings&&state.settings.device)||"tablet").trim()||"tablet"; }
+
+  /* --- single-supervisor lock, coordinated through Supabase 'sessions' --- */
+  function sessHdr(extra){ var k=sharedKey(), h={ apikey:k, Authorization:"Bearer "+k, "Content-Type":"application/json" }; if(extra) for(var x in extra) h[x]=extra[x]; return h; }
+  function activeSupervisorElsewhere(cb){        // cb(rowOrNull, unknown)
+    var base=sharedBase(); if(!base||!sharedKey()){ cb(null,true); return; }
+    var since=new Date(Date.now()-180000).toISOString();   // heartbeat within 3 min = still logged in
+    var url=base+"/rest/v1/sessions?role=eq.supervisor&heartbeat=gte."+encodeURIComponent(since)+"&device=neq."+encodeURIComponent(deviceId())+"&select=*";
+    fetch(url,{headers:sessHdr()}).then(function(r){ return r.ok?r.json():[]; })
+      .then(function(rows){ cb((rows&&rows[0])||null,false); }).catch(function(){ cb(null,true); });
+  }
+  function claimSession(a){
+    var base=sharedBase(); if(!base||!sharedKey()) return;
+    var row={ device:deviceId(), account:a.user, role:a.role, sup_name:(a.role==="supervisor"?a.name:null), heartbeat:new Date().toISOString() };
+    try{ fetch(base+"/rest/v1/sessions?on_conflict=device",{ method:"POST", headers:sessHdr({Prefer:"resolution=merge-duplicates,return=minimal"}), body:JSON.stringify(row) }).catch(function(){}); }catch(e){}
+  }
+  function heartbeatSession(){
+    var a=getAuth(), base=sharedBase(); if(!a||!base||!sharedKey()) return;
+    try{ fetch(base+"/rest/v1/sessions?device=eq."+encodeURIComponent(deviceId()),{ method:"PATCH", headers:sessHdr({Prefer:"return=minimal"}), body:JSON.stringify({heartbeat:new Date().toISOString()}) }).catch(function(){}); }catch(e){}
+  }
+  function releaseSession(){
+    var base=sharedBase(); if(!base||!sharedKey()) return;
+    try{ fetch(base+"/rest/v1/sessions?device=eq."+encodeURIComponent(deviceId()),{ method:"DELETE", headers:sessHdr({Prefer:"return=minimal"}) }).catch(function(){}); }catch(e){}
+  }
+
+  var loginUser=null, loginBusy=false, loginErr="";
+  function applyAuthDefaults(){
+    var a=getAuth(); if(!a) return;
+    if(a.role==="supervisor"){ if(!state.shift||state.shift.supervisor!==a.name){ state.shift={supervisor:a.name}; save(); } }
+    var allow=allowedTabs().map(function(t){ return t.id; });
+    if(allow.indexOf(active)<0) active=allow[0]||"machines";
+  }
+  function finishLogin(a){
+    setAuth({ user:a.user, role:a.role, name:a.name, loginAt:Date.now() });
+    if(a.role==="supervisor"){ state.shift={ supervisor:a.name }; save(); pushShift(); }
+    claimSession(a);
+    var allow=allowedTabs().map(function(t){ return t.id; });
+    active=(a.role==="qc")?"quality":(a.role==="supervisor"?"machines":(allow.indexOf(active)<0?allow[0]:active));
+    hideLogin(); render(); toast("Signed in \u00b7 "+a.name,"ok");
+  }
+  function attemptLogin(user, pin){
+    var a=acct(user); if(!a){ showLogin("Unknown account"); return; }
+    if(String(pin||"")!==pinFor(user)){ showLogin("Wrong PIN", user); return; }
+    if(a.role==="supervisor"){
+      loginBusy=true; renderLogin();
+      activeSupervisorElsewhere(function(row){
+        loginBusy=false;
+        if(row){ showLogin((row.sup_name||"A supervisor")+" is already logged in on \u201c"+(row.device||"another device")+"\u201d. Only one supervisor can be logged in at a time.", user); return; }
+        finishLogin(a);
+      });
+    } else finishLogin(a);
+  }
+  function logout(){ releaseSession(); setAuth(null); loginUser=null; closeSheet(); showLogin(); }
+  function showLogin(err, keepUser){ loginUser=keepUser||loginUser; loginErr=err||""; var el=document.getElementById("login"); if(el) el.style.display="flex"; renderLogin(); }
+  function hideLogin(){ var el=document.getElementById("login"); if(el) el.style.display="none"; loginErr=""; }
+  function renderLogin(){
+    var el=document.getElementById("login"); if(!el) return;
+    var grid=ACCOUNTS.map(function(a){ return '<button class="acct'+(loginUser===a.user?' sel':'')+'" data-lacct="'+esc(a.user)+'"><b>'+esc(a.name)+'</b><span class="rl">'+esc(roleLabel(a.role))+'</span></button>'; }).join("");
+    var pinBlock = loginUser ? '<div class="pinwrap"><input id="lpin" type="password" inputmode="numeric" autocomplete="off" placeholder="Enter PIN" maxlength="8" '+(loginBusy?'disabled':'')+'></div>'+
+      '<button class="lbtn" id="lgo"'+(loginBusy?' disabled':'')+'>'+(loginBusy?"Checking\u2026":"Sign in as "+esc(acct(loginUser).name))+'</button>' : '<div class="lnote" style="margin-top:14px">Tap your name to sign in.</div>';
+    el.innerHTML='<div class="lcard">'+
+      '<div style="text-align:center"><svg viewBox="0 0 44 44" style="height:46px;width:46px" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="llg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6cb83f"/><stop offset="1" stop-color="#3f8a22"/></linearGradient></defs><rect x="2" y="2" width="40" height="40" rx="11" fill="url(#llg)"/><g transform="translate(9,11)" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></g></svg></div>'+
+      '<h2>Manna Production</h2><div class="lsub">Sign in to continue</div>'+
+      '<div class="agrid">'+grid+'</div>'+
+      pinBlock+
+      '<div class="lerr">'+esc(loginErr)+'</div>'+
+      '<div class="lnote">Only one supervisor can be signed in at a time. Quality and Manager can sign in alongside a supervisor.</div>'+
+    '</div>';
+    if(loginUser && !loginBusy){ var pin=el.querySelector("#lpin"); if(pin){ pin.focus(); pin.onkeydown=function(e){ if(e.key==="Enter") attemptLogin(loginUser, pin.value); }; }
+      var go=el.querySelector("#lgo"); if(go) go.onclick=function(){ attemptLogin(loginUser, (el.querySelector("#lpin")||{}).value); }; }
+    el.querySelectorAll("[data-lacct]").forEach(function(b){ b.onclick=function(){ loginUser=b.getAttribute("data-lacct"); loginErr=""; renderLogin(); }; });
+  }
+  function openAccountSheet(){
+    var a=getAuth()||{};
+    openSheet('<div class="sheet-h"><span class="led" style="background:var(--ok)"></span><b>'+esc(a.name||"Account")+'</b></div>'+
+      '<div class="sheet-sub">Signed in as '+esc(roleLabel(a.role))+' on this device'+(a.role==="supervisor"?' \u00b7 supervisor is locked to your name':'')+'.</div>'+
+      (a.role==="admin"?'<button class="btn ghost block" data-act="open-settings" style="margin-bottom:10px">\u2699 Open settings</button>':'')+
+      '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button><button class="btn danger" data-act="logout">Log out</button></div>');
+  }
+
   /* ---- bearings / bushes (PR1, R1, R2, Grinder 1 use bushes; rest bearings) ---- */
   function bearingSpec(m){
     if(!m || m.kind==="autoclave") return null;
@@ -1411,10 +1525,10 @@
   ];
 
   function allowedTabs(){
-    var role=state.settings.role;
+    var role=authRole();
     if(role==="qc") return TABS.filter(function(t){ return t.id==="quality"; });
-    if(role==="supervisor") return TABS.filter(function(t){ return !(t.id==="reports"||t.id==="dispatch"||t.id==="quality"); });
-    return TABS; // manager: everything, including Quality, for oversight
+    if(role==="supervisor") return TABS.filter(function(t){ return ["machines","batches","weigh","packing","history","bearing"].indexOf(t.id)>=0; });
+    return TABS; // manager + admin: all tabs (admin also gets Settings via the gear)
   }
   function renderTabs(){
     var pw=pendingWeigh().length, pp=pendingPack().length, pq=pendingQC(), pb=dueMachines().length;
@@ -1441,8 +1555,9 @@
     var due=dueMachines();
     var dueBar = due.length ? '<div class="duebar" data-bearings-any="1">🌡 '+due.length+' machine'+(due.length>1?'s':'')+' due for bearing temp logging — '+due.map(function(m){return esc(m.short);}).join(", ")+' · tap to log</div>' : '';
     var c=curShift();
+    var locked = authRole()==="supervisor";
     var sup = c.supervisor ? ('👤 '+esc(c.supervisor)) : '<span style="color:var(--amber)">👤 set supervisor</span>';
-    return '<div class="view-head"><h1>Machines</h1><div class="meta"><span class="shiftchip" data-shift="1">'+sup+' <span style="opacity:.6">▾</span></span></div></div>'+dueBar+body;
+    return '<div class="view-head"><h1>Machines</h1><div class="meta"><span class="shiftchip"'+(locked?'':' data-shift="1"')+'>'+sup+(locked?' 🔒':' <span style="opacity:.6">▾</span>')+'</span></div></div>'+dueBar+body;
   }
   function lastRunFor(mid){
     var last=null;
@@ -1567,6 +1682,7 @@
 
   /* ----- shift context & report ----- */
   function openShiftPicker(){ var c=curShift();
+    if(authRole()==="supervisor"){ toast("Supervisor is locked to your login","warn"); return; }
     openSheet('<div class="sheet-h"><b>Supervisor in charge</b></div>'+
       '<div class="sheet-sub">Pick who is on duty — it is tagged on everything logged. The date for each entry is chosen on that entry\u2019s own screen.</div>'+
       '<div class="field"><label>Supervisor</label><select id="sh-sup">'+
@@ -2435,20 +2551,24 @@
 
   function viewSettings(){
     var u=unsyncedCount();
-    var role=state.settings.role||"manager", sup=role==="supervisor";
+    var a=getAuth()||{};
     var storeNote = lsOK ? "Data is saved on this device and works offline." :
       "Storage is blocked in this preview, so data lives only in memory. Save or install this file to keep data between sessions.";
-    return '<div class="view-head"><h1>Settings</h1><div class="meta">device & sync</div></div>'+
+    var pins=(state.settings&&state.settings.pins)||{};
+    var pinRows=ACCOUNTS.map(function(ac){
+      return '<div class="field" style="margin-bottom:8px"><label>'+esc(ac.name)+' <span class="muted" style="text-transform:none;letter-spacing:0">— '+esc(roleLabel(ac.role))+'</span></label>'+
+        '<input id="pin-'+esc(ac.user)+'" type="text" inputmode="numeric" autocomplete="off" maxlength="8" placeholder="'+esc(DEFAULT_PINS[ac.user]||"")+' (default)" value="'+esc(pins[ac.user]||"")+'"></div>';
+    }).join("");
+    return '<div class="view-head"><h1>Settings</h1><div class="meta">admin · device & sync</div></div>'+
 
-      '<div class="panel"><div class="sheet-label" style="margin:0 0 10px">View mode for this device</div>'+
-      '<div class="pickgrid">'+
-        '<button class="pick'+(role==="manager"?' sel':'')+'" data-act="set-role" data-role="manager"><b>Manager</b><small>All tabs incl. Reports</small></button>'+
-        '<button class="pick'+(role==="supervisor"?' sel':'')+'" data-act="set-role" data-role="supervisor"><b>Supervisor</b><small>Floor entry · no Reports</small></button>'+
-        '<button class="pick'+(role==="qc"?' sel':'')+'" data-act="set-role" data-role="qc"><b>Quality (QC)</b><small>Only the Quality tab</small></button>'+
-      '</div>'+
-      '<div class="field" style="margin:14px 0 0"><label>Settings PIN <span class="muted" style="text-transform:none;letter-spacing:0">— optional, locks this screen</span></label>'+
-      '<input id="set-pin" type="text" inputmode="numeric" autocomplete="off" placeholder="4–6 digits, blank = off" value="'+esc(state.settings.pin)+'" maxlength="6">'+
-      '<div class="hint">Set a PIN on supervisor tablets so the view mode can\'t be changed on the floor.</div></div></div>'+
+      '<div class="panel"><div class="row" style="align-items:center"><div><div class="sheet-label" style="margin:0">Signed in</div>'+
+      '<div style="font-size:15px;font-weight:600;margin-top:3px">'+esc(a.name||"—")+' <span class="muted" style="font-weight:400;font-size:12px">· '+esc(roleLabel(a.role))+'</span></div></div>'+
+      '<button class="btn danger" data-act="logout">Log out</button></div></div>'+
+
+      '<div class="panel" style="margin-top:14px"><div class="sheet-label" style="margin:0 0 4px">Login PINs</div>'+
+      '<div class="hint" style="margin-bottom:10px">Only one of the three supervisors can be signed in at a time. Quality and Manager can sign in alongside a supervisor. Leave a box blank to keep its default PIN.</div>'+
+      pinRows+
+      '<button class="btn primary block" data-act="save-pins" style="margin-top:6px">Save login PINs</button></div>'+
 
       '<div class="panel" style="margin-top:14px"><div class="field"><label>Device name</label>'+
       '<input id="set-device" type="text" placeholder="e.g. Floor Tablet 1" value="'+esc(state.settings.device)+'">'+
@@ -2475,7 +2595,7 @@
       '<div class="hint" style="margin-top:10px">"Re-send all" pushes every record again. It is safe — records update by id and won\'t duplicate. '+esc(storeNote)+'</div>'+
       '<div style="margin-top:12px"><button class="btn ghost block" data-act="force-update">↻ Update app to latest version</button></div>'+
       '<div class="hint" style="margin-top:8px;opacity:.85">Use this if the tablet is stuck on an old version. It clears the cache and reloads the newest code from the server (needs internet).</div>'+
-      '<div class="hint" style="margin-top:6px;opacity:.7">Build: app v27 · sync v6 · supabase</div></div>'+
+      '<div class="hint" style="margin-top:6px;opacity:.7">Build: app v28 · sync v6 · supabase</div></div>'+
 
       '<div class="panel" style="margin-top:14px"><div class="sheet-label" style="margin:0 0 10px">Customers & selling price</div>'+
       ((state.settings.customers||[]).length
@@ -2942,23 +3062,17 @@
 
   /* ===================== render & events ===================== */
   function openSettings(){
-    if(state.settings.pin){
-      openSheet('<div class="sheet-h"><span class="led" style="display:none"></span><b>Enter PIN</b></div>'+
-        '<div class="sheet-sub">Settings are locked on this device.</div>'+
-        '<div class="field"><input id="pin-in" type="password" inputmode="numeric" autocomplete="off" placeholder="••••" maxlength="6" style="text-align:center;letter-spacing:.4em;font-size:22px;font-family:var(--mono)"></div>'+
-        '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button>'+
-        '<button class="btn primary" id="pin-go">Unlock</button></div>');
-      var inp=sheet.querySelector("#pin-in"); setTimeout(function(){ try{ inp.focus(); }catch(e){} },120);
-      function tryPin(){ if((inp.value||"")===state.settings.pin){ closeSheet(); active="settings"; render(); } else { toast("Wrong PIN","err"); inp.value=""; } }
-      sheet.querySelector("#pin-go").addEventListener("click",tryPin);
-      inp.addEventListener("keydown",function(e){ if(e.key==="Enter") tryPin(); });
-    } else { active="settings"; render(); }
+    if(authRole()==="admin"){ active="settings"; render(); }
+    else openAccountSheet();
   }
 
   function render(){
-    var role=state.settings.role;
-    if(role==="supervisor" && (active==="reports"||active==="dispatch"||active==="quality")) active="machines";
-    if(role==="qc" && active!=="quality" && active!=="settings") active="quality";
+    if(!getAuth()){ var lel=document.getElementById("login"); if(!lel || lel.style.display!=="flex") showLogin(); return; }
+    var role=authRole();
+    var allow=allowedTabs().map(function(t){ return t.id; });
+    if(active==="settings"){ if(role!=="admin") active=allow[0]||"machines"; }
+    else if(allow.indexOf(active)<0) active=allow[0]||"machines";
+    var lt=document.querySelector(".linetag"); if(lt){ var a=getAuth(); lt.textContent=a?(a.name+" · "+roleLabel(a.role)):""; }
     renderTabs();
     var rc=runningCount(), el=document.getElementById("runcount");
     el.textContent=rc+" RUNNING"; el.className="runcount"+(rc?"":" zero");
@@ -3048,15 +3162,12 @@
     }
     else if(act==="export"){ exportCSV(); }
     else if(act==="force-update"){ forceUpdate(); }
-    else if(act==="set-role"){
-      var dEl=document.getElementById("set-device"), uEl=document.getElementById("set-url"), pEl=document.getElementById("set-pin");
-      var sbU=document.getElementById("set-sburl"), sbK=document.getElementById("set-sbkey");
-      if(dEl) state.settings.device=(dEl.value||"").trim();
-      if(uEl) state.settings.syncUrl=(uEl.value||"").trim();
-      if(sbU) state.settings.supabaseUrl=(sbU.value||"").trim();
-      if(sbK) state.settings.supabaseKey=(sbK.value||"").trim();
-      if(pEl) state.settings.pin=(pEl.value||"").replace(/\D/g,"").slice(0,6);
-      state.settings.role=a.getAttribute("data-role"); save(); render();
+    else if(act==="logout"){ logout(); }
+    else if(act==="open-settings"){ closeSheet(); if(authRole()==="admin"){ active="settings"; render(); } }
+    else if(act==="save-pins"){
+      state.settings.pins=state.settings.pins||{};
+      ACCOUNTS.forEach(function(ac){ var el=document.getElementById("pin-"+ac.user); if(el){ var v=(el.value||"").replace(/\D/g,"").slice(0,8); state.settings.pins[ac.user]=v; } });
+      save(); toast("Login PINs saved","ok"); render();
     }
     else if(act==="save-settings"){
       state.settings.device=(document.getElementById("set-device").value||"").trim();
@@ -3139,7 +3250,11 @@
       e.preventDefault();                         // at the very top, pulling down -> no refresh
     },{passive:false});
   })();
-  load(); render(); scheduleAutoSync(3000);
+  load();
+  if(getAuth()){ applyAuthDefaults(); render(); } else { showLogin(); }
+  scheduleAutoSync(3000);
+  setInterval(heartbeatSession, 60000);   // keep this device's session alive for the supervisor lock
+  window.addEventListener("beforeunload", function(){ if(authRole()) releaseSession(); });
   // Hydrate from the shared master copy on open; if the master is empty/behind and this
   // phone already holds real data, seed the master from here.
   setTimeout(function(){
