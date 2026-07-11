@@ -439,7 +439,6 @@
 </div>
 
 <nav class="tabs" id="tabs"></nav>
-<div id="login"></div>
 
 <div id="scrim"></div>
 <div id="sheet" role="dialog" aria-modal="true"></div>
@@ -466,7 +465,7 @@
     {id:"AC_M",name:"Autoclave M",  short:"AC-M", kind:"autoclave", capacity:2200, accent:"var(--ember)", needsQuality:false, weigh:false, group:"Autoclaves"},
     {id:"AC_N",name:"Autoclave N",  short:"AC-N", kind:"autoclave", capacity:2200, accent:"var(--ember)", needsQuality:false, weigh:false, group:"Autoclaves", enabled:false},
     {id:"AC_O",name:"Autoclave O",  short:"AC-O", kind:"autoclave", capacity:2200, accent:"var(--ember)", needsQuality:false, weigh:false, group:"Autoclaves", enabled:false},
-    {id:"PR2",name:"Pre-Refiner 2", short:"PR2",  kind:"prerefiner",accent:"var(--elec)",  needsQuality:false, weigh:false, group:"Pre-Refiners"},
+    {id:"PR2",name:"Pre-Refiner 2", short:"PR2",  kind:"prerefiner",accent:"var(--elec)",  needsQuality:true, weigh:false, group:"Pre-Refiners"},
     {id:"R1", name:"Refiner 1",     short:"R1",   kind:"refiner",   accent:"var(--elec)",  needsQuality:true,  weigh:false, sub:"stands in for R3", group:"Refiners"},
     {id:"R3", name:"Refiner 3",     short:"R3",   kind:"refiner",   accent:"var(--elec)",  needsQuality:true,  weigh:false, group:"Refiners"},
     {id:"R4", name:"Refiner 4",     short:"R4",   kind:"refiner",   accent:"var(--elec)",  needsQuality:true,  weigh:true,  group:"Refiners"},
@@ -557,102 +556,9 @@
       headers:{ "apikey":key, "Authorization":"Bearer "+key, "Content-Type":"application/json", "Prefer":"resolution=merge-duplicates,return=minimal" },
       body:JSON.stringify([{ id:c.date+"|"+c.name, shift_date:c.date, shift:c.name, supervisor:c.supervisor, updated_at:new Date().toISOString() }]) }).catch(function(){}); }catch(e){}
   }
-  /* ============================ LOGIN / ROLES ============================ */
-  var ACCOUNTS=[
-    {user:"Mathai",   role:"supervisor", name:"Mathai"},
-    {user:"Rahul",    role:"supervisor", name:"Rahul"},
-    {user:"Devanand", role:"supervisor", name:"Devanand"},
-    {user:"QC",       role:"qc",         name:"Quality"},
-    {user:"Manager",  role:"manager",    name:"Manager"},
-    {user:"Admin",    role:"admin",      name:"Admin"}
-  ];
-  var DEFAULT_PINS={ Mathai:"1111", Rahul:"2222", Devanand:"3333", QC:"4444", Manager:"5555", Admin:"9999" };
-  function acct(user){ for(var i=0;i<ACCOUNTS.length;i++) if(ACCOUNTS[i].user===user) return ACCOUNTS[i]; return null; }
-  function pinFor(user){ var p=(state.settings&&state.settings.pins)||{}; return (p[user]!=null&&p[user]!=="")?String(p[user]):(DEFAULT_PINS[user]||""); }
-  function roleLabel(r){ return r==="supervisor"?"Supervisor":r==="qc"?"Quality (QC)":r==="manager"?"Manager":r==="admin"?"Admin":""; }
-  var AUTH_KEY="rrp_auth_v1", authMem=null;
-  function getAuth(){ if(authMem) return authMem; try{ var s=localStorage.getItem(AUTH_KEY); if(s){ authMem=JSON.parse(s); return authMem; } }catch(e){} return null; }
-  function setAuth(a){ authMem=a; try{ if(a) localStorage.setItem(AUTH_KEY,JSON.stringify(a)); else localStorage.removeItem(AUTH_KEY); }catch(e){} }
-  function authRole(){ var a=getAuth(); return a?a.role:null; }
-  function deviceId(){ return ((state.settings&&state.settings.device)||"tablet").trim()||"tablet"; }
+  /* roles: simple per-device view mode, no login */
+  function canEditHistory(){ return true; }
 
-  /* --- single-supervisor lock, coordinated through Supabase 'sessions' --- */
-  function sessHdr(extra){ var k=sharedKey(), h={ apikey:k, Authorization:"Bearer "+k, "Content-Type":"application/json" }; if(extra) for(var x in extra) h[x]=extra[x]; return h; }
-  function activeSupervisorElsewhere(cb){        // cb(rowOrNull, unknown)
-    var base=sharedBase(); if(!base||!sharedKey()){ cb(null,true); return; }
-    var since=new Date(Date.now()-180000).toISOString();   // heartbeat within 3 min = still logged in
-    var url=base+"/rest/v1/sessions?role=eq.supervisor&heartbeat=gte."+encodeURIComponent(since)+"&device=neq."+encodeURIComponent(deviceId())+"&select=*";
-    fetch(url,{headers:sessHdr()}).then(function(r){ return r.ok?r.json():[]; })
-      .then(function(rows){ cb((rows&&rows[0])||null,false); }).catch(function(){ cb(null,true); });
-  }
-  function claimSession(a){
-    var base=sharedBase(); if(!base||!sharedKey()) return;
-    var row={ device:deviceId(), account:a.user, role:a.role, sup_name:(a.role==="supervisor"?a.name:null), heartbeat:new Date().toISOString() };
-    try{ fetch(base+"/rest/v1/sessions?on_conflict=device",{ method:"POST", headers:sessHdr({Prefer:"resolution=merge-duplicates,return=minimal"}), body:JSON.stringify(row) }).catch(function(){}); }catch(e){}
-  }
-  function heartbeatSession(){
-    var a=getAuth(), base=sharedBase(); if(!a||!base||!sharedKey()) return;
-    try{ fetch(base+"/rest/v1/sessions?device=eq."+encodeURIComponent(deviceId()),{ method:"PATCH", headers:sessHdr({Prefer:"return=minimal"}), body:JSON.stringify({heartbeat:new Date().toISOString()}) }).catch(function(){}); }catch(e){}
-  }
-  function releaseSession(){
-    var base=sharedBase(); if(!base||!sharedKey()) return;
-    try{ fetch(base+"/rest/v1/sessions?device=eq."+encodeURIComponent(deviceId()),{ method:"DELETE", headers:sessHdr({Prefer:"return=minimal"}) }).catch(function(){}); }catch(e){}
-  }
-
-  var loginUser=null, loginBusy=false, loginErr="";
-  function applyAuthDefaults(){
-    var a=getAuth(); if(!a) return;
-    if(a.role==="supervisor"){ if(!state.shift||state.shift.supervisor!==a.name){ state.shift={supervisor:a.name}; save(); } }
-    var allow=allowedTabs().map(function(t){ return t.id; });
-    if(allow.indexOf(active)<0) active=allow[0]||"machines";
-  }
-  function finishLogin(a){
-    setAuth({ user:a.user, role:a.role, name:a.name, loginAt:Date.now() });
-    if(a.role==="supervisor"){ state.shift={ supervisor:a.name }; save(); pushShift(); }
-    claimSession(a);
-    var allow=allowedTabs().map(function(t){ return t.id; });
-    active=(a.role==="qc")?"quality":(a.role==="supervisor"?"machines":(allow.indexOf(active)<0?allow[0]:active));
-    hideLogin(); render(); toast("Signed in \u00b7 "+a.name,"ok");
-  }
-  function attemptLogin(user, pin){
-    var a=acct(user); if(!a){ showLogin("Unknown account"); return; }
-    if(String(pin||"")!==pinFor(user)){ showLogin("Wrong PIN", user); return; }
-    if(a.role==="supervisor"){
-      loginBusy=true; renderLogin();
-      activeSupervisorElsewhere(function(row){
-        loginBusy=false;
-        if(row){ showLogin((row.sup_name||"A supervisor")+" is already logged in on \u201c"+(row.device||"another device")+"\u201d. Only one supervisor can be logged in at a time.", user); return; }
-        finishLogin(a);
-      });
-    } else finishLogin(a);
-  }
-  function logout(){ releaseSession(); setAuth(null); loginUser=null; closeSheet(); showLogin(); }
-  function showLogin(err, keepUser){ loginUser=keepUser||loginUser; loginErr=err||""; var el=document.getElementById("login"); if(el) el.style.display="flex"; renderLogin(); }
-  function hideLogin(){ var el=document.getElementById("login"); if(el) el.style.display="none"; loginErr=""; }
-  function renderLogin(){
-    var el=document.getElementById("login"); if(!el) return;
-    var grid=ACCOUNTS.map(function(a){ return '<button class="acct'+(loginUser===a.user?' sel':'')+'" data-lacct="'+esc(a.user)+'"><b>'+esc(a.name)+'</b><span class="rl">'+esc(roleLabel(a.role))+'</span></button>'; }).join("");
-    var pinBlock = loginUser ? '<div class="pinwrap"><input id="lpin" type="password" inputmode="numeric" autocomplete="off" placeholder="Enter PIN" maxlength="8" '+(loginBusy?'disabled':'')+'></div>'+
-      '<button class="lbtn" id="lgo"'+(loginBusy?' disabled':'')+'>'+(loginBusy?"Checking\u2026":"Sign in as "+esc(acct(loginUser).name))+'</button>' : '<div class="lnote" style="margin-top:14px">Tap your name to sign in.</div>';
-    el.innerHTML='<div class="lcard">'+
-      '<div style="text-align:center"><svg viewBox="0 0 44 44" style="height:46px;width:46px" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="llg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6cb83f"/><stop offset="1" stop-color="#3f8a22"/></linearGradient></defs><rect x="2" y="2" width="40" height="40" rx="11" fill="url(#llg)"/><g transform="translate(9,11)" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></g></svg></div>'+
-      '<h2>Manna Production</h2><div class="lsub">Sign in to continue</div>'+
-      '<div class="agrid">'+grid+'</div>'+
-      pinBlock+
-      '<div class="lerr">'+esc(loginErr)+'</div>'+
-      '<div class="lnote">Only one supervisor can be signed in at a time. Quality and Manager can sign in alongside a supervisor.</div>'+
-    '</div>';
-    if(loginUser && !loginBusy){ var pin=el.querySelector("#lpin"); if(pin){ pin.focus(); pin.onkeydown=function(e){ if(e.key==="Enter") attemptLogin(loginUser, pin.value); }; }
-      var go=el.querySelector("#lgo"); if(go) go.onclick=function(){ attemptLogin(loginUser, (el.querySelector("#lpin")||{}).value); }; }
-    el.querySelectorAll("[data-lacct]").forEach(function(b){ b.onclick=function(){ loginUser=b.getAttribute("data-lacct"); loginErr=""; renderLogin(); }; });
-  }
-  function openAccountSheet(){
-    var a=getAuth()||{};
-    openSheet('<div class="sheet-h"><span class="led" style="background:var(--ok)"></span><b>'+esc(a.name||"Account")+'</b></div>'+
-      '<div class="sheet-sub">Signed in as '+esc(roleLabel(a.role))+' on this device'+(a.role==="supervisor"?' \u00b7 supervisor is locked to your name':'')+'.</div>'+
-      (a.role==="admin"?'<button class="btn ghost block" data-act="open-settings" style="margin-bottom:10px">\u2699 Open settings</button>':'')+
-      '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button><button class="btn danger" data-act="logout">Log out</button></div>');
-  }
 
   /* ---- bearings / bushes (PR1, R1, R2, Grinder 1 use bushes; rest bearings) ---- */
   function bearingSpec(m){
@@ -750,7 +656,7 @@
   /* ===================== helpers ===================== */
   function eligibleBatches(){ return state.batches.filter(function(b){ return b.autoclaveDone && !b.closed; }); }
   function batchTaken(b){ return (b.qualities && b.qualities.length) ? b.qualities : []; }
-  function qualWeighed(b,q){ return state.runs.some(function(r){ return r.batchId===b.id && r.machineId==="R4" && r.quality===q && r.weightKg!==""&&r.weightKg!=null; }); }
+  function qualWeighed(b,q){ return state.runs.some(function(r){ return r.batchId===b.id && !r.shiftwise && r.quality===q && r.weightKg!==""&&r.weightKg!=null && (r.machineId==="R4"||r.needsWeigh); }); }
   function allTakenWeighed(b){ var t=batchTaken(b); if(!t.length) return false;
     for(var i=0;i<t.length;i++){ if(!qualWeighed(b,t[i])) return false; } return true; }
   function activeBatches(){ return state.batches.filter(function(b){ return !b.closed; }); }
@@ -770,7 +676,7 @@
   function openBatchDetail(id){
     var b=batch(id); if(!b){ closeSheet(); return; }
     var runs=state.runs.filter(function(r){ return r.batchId===id; }).sort(function(a,c){ return (a.end||0)-(c.end||0); });
-    var byQ={}; runs.forEach(function(r){ if(r.machineId==="R4" && r.quality){ byQ[r.quality]=(byQ[r.quality]||0)+(parseFloat(r.weightKg)||0); } });
+    var byQ={}; runs.forEach(function(r){ if(!r.shiftwise && r.quality && (r.machineId==="R4"||r.needsWeigh)){ byQ[r.quality]=(byQ[r.quality]||0)+(parseFloat(r.weightKg)||0); } });
     var qs=Object.keys(byQ); var totalOut=0; qs.forEach(function(q){ totalOut+=byQ[q]; });
     var charge=b.capacity;
     var yieldPct=(charge&&totalOut>0)?Math.round(totalOut/charge*1000)/10:null;
@@ -816,8 +722,8 @@
     state.batches=state.batches.filter(function(x){ return x.id!==id; });
     save(); closeSheet(); render(); toast("Batch "+b.no+" deleted","ok"); scheduleAutoSync(400); }
   function batch(id){ for(var i=0;i<state.batches.length;i++) if(state.batches[i].id===id) return state.batches[i]; return null; }
-  function isComplete(r){ return r.machineId==="R4" ? (r.weightKg!=="" && r.weightKg!=null) : true; }
-  function pendingWeigh(){ return state.runs.filter(function(r){ return (r.needsWeigh||r.machineId==="R4") && (r.weightKg===""||r.weightKg==null); }); }
+  function isComplete(r){ return r.needsWeigh ? (r.weightKg!=="" && r.weightKg!=null) : true; }
+  function pendingWeigh(){ return state.runs.filter(function(r){ return r.needsWeigh && (r.weightKg===""||r.weightKg==null); }); }
   function unsynced(){ return state.runs.filter(function(r){ return !r.synced && isComplete(r); }); }
   function unsyncedDispatches(){ return (state.dispatches||[]).filter(function(d){ return !d.synced; }); }
   function unsyncedLoads(){ return (state.dispatchLoads||[]).filter(function(l){ return !l.synced && !l.dummy; }); }
@@ -869,8 +775,9 @@
     save(); closeSheet(); render(); toast("Loaded "+batchNo+" on "+m.name,"ok");
     postStatus(mid,"running");
   }
-  function startRefiner(mid, batchId, quality, sourceBatches, elecStart, hourStart, shiftDate, shift){
-    state.machines[mid].running={ batchId:batchId, quality:quality||"", sourceBatches:sourceBatches||[], elecStart:(elecStart==null?"":elecStart), hourStart:(hourStart==null?"":hourStart), shiftDate:shiftDate||todayISO(), shift:shift||autoShift(), segStart:Date.now(), accumMs:0, paused:false };
+  function startRefiner(mid, batchId, quality, sourceBatches, elecStart, hourStart, shiftDate, shift, opts){
+    var wg=(opts&&opts.weigh!=null)?!!opts.weigh:!!M(mid).weigh;
+    state.machines[mid].running={ batchId:batchId, quality:quality||"", sourceBatches:sourceBatches||[], weigh:wg, elecStart:(elecStart==null?"":elecStart), hourStart:(hourStart==null?"":hourStart), shiftDate:shiftDate||todayISO(), shift:shift||autoShift(), segStart:Date.now(), accumMs:0, paused:false };
     save(); closeSheet(); render();
     var b=batch(batchId); toast(M(mid).name+" started · "+b.no+(quality?" · "+quality:""),"ok");
     postStatus(mid,"running");
@@ -1010,7 +917,7 @@
       kWh:fields.kWh==null?"":fields.kWh, elecStart:fields.elecStart==null?"":fields.elecStart, elecEnd:fields.elecEnd==null?"":fields.elecEnd, firewoodKg:fields.firewoodKg==null?"":fields.firewoodKg,
       hourStart:hStart==null?"":hStart, hourEnd:hEnd==null?"":hEnd,
       workers:fields.workers==null?"":fields.workers,
-      weightKg:fields.weightKg==null?"":fields.weightKg, weighEntries:[], needsWeigh:!!m.weigh,
+      weightKg:fields.weightKg==null?"":fields.weightKg, weighEntries:[], needsWeigh:(run.weigh!=null?!!run.weigh:!!m.weigh),
       synced:false, createdAt:end
     };
     state.runs.push(row);
@@ -1271,7 +1178,7 @@
       var tables=["runs","dispatches","dispatch_load_items","dispatch_loads","maintenance","bearing_logs","conversions","quality_tests","shifts"];
       Promise.all(tables.map(function(tb){ return sbDeleteAll(tb).catch(function(){ return false; }); }))
         .then(function(){ return pushEmptyPlant(); })
-        .then(function(){ if(!sheetIsOpen()) render(); toast("Device reset · cloud cleared","ok"); })
+        .then(function(){ if(!sheetIsOpen() && active!=="settings") render(); toast("Device reset · cloud cleared","ok"); })
         .catch(function(){ toast("Reset locally — cloud clear incomplete (will retry on sync)","warn"); });
     } else {
       toast("Device reset","ok");
@@ -1316,7 +1223,6 @@
       var n=pending.length+pendD.length+pendM.length+pendB.length+pendC.length+pendL.length+pendQ.length+pendDel.length+pendLDel.length;
       var sheetOpen=document.getElementById("sheet") && document.getElementById("sheet").classList.contains("show");
       if(!quiet){ render(); toast("Saved "+n+" record"+(n>1?"s":"")+" to the database","ok"); }
-      else if(active==="settings" && !sheetOpen){ render(); }
     }).catch(function(e){
       syncing=false; store.write(JSON.stringify(state)); // keep any partial successes already marked
       if(!quiet){ render(); toast(syncErr(e),"err"); }
@@ -1360,10 +1266,19 @@
     var keepSettings=state.settings;                     // preserve this device's own settings
     var keepVer=state.sharedVersion, keepBy=state.lastSharedBy, keepAt=state.lastSharedAt;
     var keepPendD=state.pendingDeletes, keepPendL=state.pendingLoadDeletes, keepLast=state.lastSyncAt;
+    // Capture records that only exist on this device (not yet uploaded) so a pull can NEVER wipe them.
+    var SYNC_ARRAYS=["runs","dispatches","dispatchLoads","maintenance","bearingLogs","conversions","qualityTests"];
+    var keepUnsynced={};
+    SYNC_ARRAYS.forEach(function(k){ keepUnsynced[k]=(state[k]||[]).filter(function(x){ return x && x.synced===false; }); });
     Object.keys(doc).forEach(function(k){ state[k]=doc[k]; });
     state.settings=keepSettings;
     state.sharedVersion=keepVer; state.lastSharedBy=keepBy; state.lastSharedAt=keepAt;
     state.pendingDeletes=keepPendD||[]; state.pendingLoadDeletes=keepPendL||[]; state.lastSyncAt=keepLast||0;
+    // Re-insert any local unsynced records missing from the incoming snapshot (offline entries survive login/logout & pulls).
+    SYNC_ARRAYS.forEach(function(k){
+      var arr=state[k]||(state[k]=[]); var have={}; arr.forEach(function(x){ if(x&&x.id) have[x.id]=1; });
+      (keepUnsynced[k]||[]).forEach(function(x){ if(x&&x.id&&!have[x.id]) arr.push(x); });
+    });
     if(!state.machines) state.machines={};
     MACHINES.forEach(function(m){ if(!state.machines[m.id]) state.machines[m.id]={running:null,down:null}; else if(state.machines[m.id].down===undefined) state.machines[m.id].down=null; });
     if(!state.dispatchLoads) state.dispatchLoads=[];
@@ -1386,7 +1301,7 @@
         applyShared(row.doc);
         state.sharedVersion=rv; state.lastSharedBy=row.updated_by||""; state.lastSharedAt=row.updated_at||"";
         store.write(JSON.stringify(state));
-        if(!sheetIsOpen()) render();
+        if(!sheetIsOpen() && active!=="settings") render();
         if(opts.cb) opts.cb(true); return;
       }
       if(opts.cb) opts.cb(false);
@@ -1429,7 +1344,7 @@
             attachmentUrl:row.attachment_url||"", attachmentName:row.attachment_name||"", synced:true });
           changed=true;
         });
-        if(changed){ store.write(JSON.stringify(state)); if(!sheetIsOpen()) render(); }
+        if(changed){ store.write(JSON.stringify(state)); if(!sheetIsOpen() && active!=="settings") render(); }
       }).catch(function(){});
   }
   /* QC lab-report photo/PDF upload to Supabase Storage. Files never go into the shared
@@ -1462,7 +1377,7 @@
       var rec=null; (state.qualityTests||[]).forEach(function(t){ if(t.id===item.testId) rec=t; });
       if(rec){ rec.attachmentUrl=url; rec.attachmentName=item.name; rec.attachmentPending=false; rec.synced=false; }
       var q2=qcQueueGet(); q2.shift(); qcQueueSet(q2);
-      qcFlushing=false; save(); if(!sheetIsOpen()) render();
+      qcFlushing=false; save(); if(!sheetIsOpen() && active!=="settings") render();
       if(qcQueueGet().length) setTimeout(flushQcUploads, 800);
     }).catch(function(){ qcFlushing=false; /* keep in queue, retry on next trigger */ });
   }
@@ -1489,7 +1404,6 @@
       syncing=false; store.write(JSON.stringify(state));
       var sheetOpen=document.getElementById("sheet") && document.getElementById("sheet").classList.contains("show");
       if(!quiet){ render(); toast("Sent "+n+" record"+(n>1?"s":"")+" to the sheet","ok"); }
-      else if(active==="settings" && !sheetOpen){ render(); }
     })
     .catch(function(e){ syncing=false; if(!quiet){ render(); toast(syncErr(e),"err"); } });
   }
@@ -1525,10 +1439,10 @@
   ];
 
   function allowedTabs(){
-    var role=authRole();
+    var role=state.settings.role;
     if(role==="qc") return TABS.filter(function(t){ return t.id==="quality"; });
-    if(role==="supervisor") return TABS.filter(function(t){ return ["machines","batches","weigh","packing","history","bearing"].indexOf(t.id)>=0; });
-    return TABS; // manager + admin: all tabs (admin also gets Settings via the gear)
+    if(role==="supervisor") return TABS.filter(function(t){ return !(t.id==="reports"||t.id==="dispatch"||t.id==="quality"); });
+    return TABS; // manager (default): everything
   }
   function renderTabs(){
     var pw=pendingWeigh().length, pp=pendingPack().length, pq=pendingQC(), pb=dueMachines().length;
@@ -1555,9 +1469,8 @@
     var due=dueMachines();
     var dueBar = due.length ? '<div class="duebar" data-bearings-any="1">🌡 '+due.length+' machine'+(due.length>1?'s':'')+' due for bearing temp logging — '+due.map(function(m){return esc(m.short);}).join(", ")+' · tap to log</div>' : '';
     var c=curShift();
-    var locked = authRole()==="supervisor";
     var sup = c.supervisor ? ('👤 '+esc(c.supervisor)) : '<span style="color:var(--amber)">👤 set supervisor</span>';
-    return '<div class="view-head"><h1>Machines</h1><div class="meta"><span class="shiftchip"'+(locked?'':' data-shift="1"')+'>'+sup+(locked?' 🔒':' <span style="opacity:.6">▾</span>')+'</span></div></div>'+dueBar+body;
+    return '<div class="view-head"><h1>Machines</h1><div class="meta"><span class="shiftchip" data-shift="1">'+sup+' <span style="opacity:.6">▾</span></span></div></div>'+dueBar+body;
   }
   function lastRunFor(mid){
     var last=null;
@@ -1682,7 +1595,6 @@
 
   /* ----- shift context & report ----- */
   function openShiftPicker(){ var c=curShift();
-    if(authRole()==="supervisor"){ toast("Supervisor is locked to your login","warn"); return; }
     openSheet('<div class="sheet-h"><b>Supervisor in charge</b></div>'+
       '<div class="sheet-sub">Pick who is on duty — it is tagged on everything logged. The date for each entry is chosen on that entry\u2019s own screen.</div>'+
       '<div class="field"><label>Supervisor</label><select id="sh-sup">'+
@@ -1771,7 +1683,7 @@
     var rows=state.runs.filter(function(r){ return r.batchId===b.id; });
     function has(mid,q){ return rows.some(function(r){ return r.machineId===mid && r.quality===q; }); }
     function r3(q){ return has("R3",q)||has("R1",q); }
-    function weighed(q){ return rows.some(function(r){ return r.machineId==="R4"&&r.quality===q&&r.weightKg!==""&&r.weightKg!=null; }); }
+    function weighed(q){ return rows.some(function(r){ return (r.machineId==="R4"||r.needsWeigh)&&!r.shiftwise&&r.quality===q&&r.weightKg!==""&&r.weightKg!=null; }); }
     var taken=b.qualities||[];
     function isTaken(q){ return taken.indexOf(q)>-1; }
     var grid='<div class="qgrid"><div class="hdr" style="text-align:left">Taken?</div><div class="hdr">R3/R1</div><div class="hdr">R4</div><div class="hdr">Weighed</div>';
@@ -1832,7 +1744,7 @@
   function weighedRuns(){ return state.runs.filter(function(r){
     var hasW = r.weightKg!==""&&r.weightKg!=null && parseFloat(r.weightKg)>0;
     if(!hasW) return false;
-    if(r.machineId==="R4" && r.quality) return true;          // special line (R4)
+    if(!r.shiftwise && r.quality && (r.machineId==="R4" || r.needsWeigh)) return true;   // production refiner output (R4 or R2 on special line)
     if(r.line==="coarse" && r.shiftwise) return true;         // coarse line shift output packs too
     return false;
   }); }
@@ -2279,7 +2191,7 @@
         toast(anyHold?"Saved \u00b7 uploading report\u2026":"Saved \u00b7 uploading report\u2026","ok");
         uploadDataUrl(keyId, newName, newFile).then(function(url){
           recs.forEach(function(r){ r.attachmentUrl=url; r.attachmentName=newName; r.attachmentPending=false; r.synced=false; });
-          save(); if(!sheetIsOpen()) render();
+          save(); if(!sheetIsOpen() && active!=="settings") render();
         }).catch(function(){ if(!qcEnqueueUpload(keyId, newName, newFile)) toast("Report too large to queue","warn"); });
         scheduleAutoSync(700);
       } else {
@@ -2367,18 +2279,18 @@
       var col2 = shiftwise
         ? shiftChip+(r.batchNo?' <span class="batchref" style="font-size:11px">'+esc(r.batchNo)+'</span>':'')+(r.formulation?'<br><span class="muted" style="font-size:10px">'+esc(r.formulation)+'</span>':'')
         : '<span class="batchref" style="font-size:12px">'+esc(r.batchNo)+'</span>'+mixLine+(r.quality?'<br>'+qchip(r.quality):'')+(r.formulation?'<br><span class="muted" style="font-size:10px">'+esc(r.formulation)+'</span>':'');
-      var wt = (r.weightKg!==""&&r.weightKg!=null) ? esc(r.weightKg)+' kg' : (r.machineId==="R4" ? '<span class="muted">pending</span>' : '—');
+      var wt = (r.weightKg!==""&&r.weightKg!=null) ? esc(r.weightKg)+' kg' : (r.needsWeigh ? '<span class="muted">pending</span>' : '—');
       var mlabel = r.short || shortName(r.machineId);
       var sup = r.supervisor ? esc(r.supervisor) : '<span class="muted">—</span>';
       var when = esc(fmtDay(runDate(r)))+(r.shift?' · '+esc(r.shift):'');
       var dk=dupKey(r), dup="";
       if(dk && dupCount[dk]>1){ dupSeen[dk]=(dupSeen[dk]||0)+1; dup=' <span style="color:var(--err);font-weight:700;font-size:10px">⚠ duplicate '+dupSeen[dk]+' of '+dupCount[dk]+'</span>'; }
       else if(!shiftwise && (r.passes||1)>1){ dup=' <span style="color:var(--err);font-weight:700;font-size:10px">⚠ merged '+r.passes+' entries</span>'; }
-      else if(shiftwise && (r.passes||1)>1){ dup=' <span class="muted" style="font-size:10px">'+r.passes+' segments</span>'; }
+      else if(shiftwise && (r.passes||1)>1){ dup=' <span class="muted" style="font-size:10px">'+r.passes+' start/stops combined</span>'; }
       var runCell = fmtHrs(r.runtimeMin);
       var hasHour=(r.hourStart!==""&&r.hourStart!=null)||(r.hourEnd!==""&&r.hourEnd!=null);
       if(!isAuto && hasHour){ runCell += '<br><span class="muted" style="font-size:10px">hr '+esc(r.hourStart!==""&&r.hourStart!=null?r.hourStart:'—')+' → '+esc(r.hourEnd!==""&&r.hourEnd!=null?r.hourEnd:'—')+'</span>'; }
-      return '<tr class="hrow" data-edit-run="'+esc(r.id)+'" style="cursor:pointer"><td><span class="synced '+(r.synced?"yes":"")+'" title="'+(r.synced?"Saved to cloud":"Not yet synced to cloud")+'"></span></td>'+
+      return '<tr class="hrow"'+(canEditHistory()?' data-edit-run="'+esc(r.id)+'" style="cursor:pointer"':'')+'><td><span class="synced '+(r.synced?"yes":"")+'" title="'+(r.synced?"Saved to cloud":"Not yet synced to cloud")+'"></span></td>'+
         '<td><b>'+esc(mlabel)+'</b>'+dup+'<br><span class="muted" style="font-size:11px">'+when+'</span>'+(isAuto?acTimes(r):'')+'</td>'+
         '<td>'+col2+'</td>'+
         '<td>'+sup+'</td>'+
@@ -2390,7 +2302,7 @@
     if(!body) body='<tr><td colspan="8" style="text-align:center;color:var(--ink-dim);padding:22px">No runs match this filter.</td></tr>';
 
     var u=unsynced().length;
-    return '<div class="view-head"><h1>History</h1><div class="meta">'+fr.length+' shown · '+u+' unsynced · <span class="synced yes" style="display:inline-block;vertical-align:middle"></span> = saved to cloud · tap a row to edit</div></div>'+
+    return '<div class="view-head"><h1>History</h1><div class="meta">'+fr.length+' shown · '+u+' unsynced · <span class="synced yes" style="display:inline-block;vertical-align:middle"></span> = saved to cloud'+(canEditHistory()?' · tap a row to edit':' · view only')+'</div></div>'+
       filters+summary+
       '<div class="panel scroll-x"><table class="hist"><thead><tr><th></th><th>Machine</th><th>Batch</th><th>Super</th><th>Run (h)</th><th>Energy</th><th>Crew</th><th>Weight</th></tr></thead><tbody>'+body+'</tbody></table></div>'+
       '<div style="margin-top:12px"><button class="btn ghost block" data-act="export">Export CSV backup</button></div>';
@@ -2399,6 +2311,7 @@
   /* ---- Editable history: tap a row to correct or delete an entry ---- */
   function findRun(id){ for(var i=0;i<state.runs.length;i++){ if(state.runs[i].id===id) return state.runs[i]; } return null; }
   function openEditRun(id){
+    if(!canEditHistory()){ toast("Only a manager or admin can edit or delete entries","warn"); return; }
     var r=findRun(id); if(!r){ closeSheet(); return; }
     var isShift=!!r.shiftwise;
     var mm=r.machineId?M(r.machineId):null;
@@ -2551,24 +2464,20 @@
 
   function viewSettings(){
     var u=unsyncedCount();
-    var a=getAuth()||{};
+    var role=state.settings.role||"manager";
     var storeNote = lsOK ? "Data is saved on this device and works offline." :
       "Storage is blocked in this preview, so data lives only in memory. Save or install this file to keep data between sessions.";
-    var pins=(state.settings&&state.settings.pins)||{};
-    var pinRows=ACCOUNTS.map(function(ac){
-      return '<div class="field" style="margin-bottom:8px"><label>'+esc(ac.name)+' <span class="muted" style="text-transform:none;letter-spacing:0">— '+esc(roleLabel(ac.role))+'</span></label>'+
-        '<input id="pin-'+esc(ac.user)+'" type="text" inputmode="numeric" autocomplete="off" maxlength="8" placeholder="'+esc(DEFAULT_PINS[ac.user]||"")+' (default)" value="'+esc(pins[ac.user]||"")+'"></div>';
-    }).join("");
-    return '<div class="view-head"><h1>Settings</h1><div class="meta">admin · device & sync</div></div>'+
+    return '<div class="view-head"><h1>Settings</h1><div class="meta">device & sync</div></div>'+
 
-      '<div class="panel"><div class="row" style="align-items:center"><div><div class="sheet-label" style="margin:0">Signed in</div>'+
-      '<div style="font-size:15px;font-weight:600;margin-top:3px">'+esc(a.name||"—")+' <span class="muted" style="font-weight:400;font-size:12px">· '+esc(roleLabel(a.role))+'</span></div></div>'+
-      '<button class="btn danger" data-act="logout">Log out</button></div></div>'+
-
-      '<div class="panel" style="margin-top:14px"><div class="sheet-label" style="margin:0 0 4px">Login PINs</div>'+
-      '<div class="hint" style="margin-bottom:10px">Only one of the three supervisors can be signed in at a time. Quality and Manager can sign in alongside a supervisor. Leave a box blank to keep its default PIN.</div>'+
-      pinRows+
-      '<button class="btn primary block" data-act="save-pins" style="margin-top:6px">Save login PINs</button></div>'+
+      '<div class="panel"><div class="sheet-label" style="margin:0 0 10px">View mode for this device</div>'+
+      '<div class="pickgrid">'+
+        '<button class="pick'+(role==="manager"?' sel':'')+'" data-act="set-role" data-role="manager"><b>Manager</b><small>All tabs incl. Reports</small></button>'+
+        '<button class="pick'+(role==="supervisor"?' sel':'')+'" data-act="set-role" data-role="supervisor"><b>Supervisor</b><small>Floor entry · no Reports</small></button>'+
+        '<button class="pick'+(role==="qc"?' sel':'')+'" data-act="set-role" data-role="qc"><b>Quality (QC)</b><small>Only the Quality tab</small></button>'+
+      '</div>'+
+      '<div class="field" style="margin:14px 0 0"><label>Settings PIN <span class="muted" style="text-transform:none;letter-spacing:0">— optional, locks this screen</span></label>'+
+      '<input id="set-pin" type="text" inputmode="numeric" autocomplete="off" placeholder="4–6 digits, blank = off" value="'+esc(state.settings.pin)+'" maxlength="6">'+
+      '<div class="hint">Set a PIN on supervisor tablets so the view mode can\'t be changed on the floor.</div></div></div>'+
 
       '<div class="panel" style="margin-top:14px"><div class="field"><label>Device name</label>'+
       '<input id="set-device" type="text" placeholder="e.g. Floor Tablet 1" value="'+esc(state.settings.device)+'">'+
@@ -2595,7 +2504,7 @@
       '<div class="hint" style="margin-top:10px">"Re-send all" pushes every record again. It is safe — records update by id and won\'t duplicate. '+esc(storeNote)+'</div>'+
       '<div style="margin-top:12px"><button class="btn ghost block" data-act="force-update">↻ Update app to latest version</button></div>'+
       '<div class="hint" style="margin-top:8px;opacity:.85">Use this if the tablet is stuck on an old version. It clears the cache and reloads the newest code from the server (needs internet).</div>'+
-      '<div class="hint" style="margin-top:6px;opacity:.7">Build: app v28 · sync v6 · supabase</div></div>'+
+      '<div class="hint" style="margin-top:6px;opacity:.7">Build: app v33 · sync v6 · supabase</div></div>'+
 
       '<div class="panel" style="margin-top:14px"><div class="sheet-label" style="margin:0 0 10px">Customers & selling price</div>'+
       ((state.settings.customers||[]).length
@@ -2628,25 +2537,25 @@
     var m=M(mid), st=state.machines[mid];
     if(st.down) return openRepairSheet(mid);
     if(st.running) return openOffSheet(mid);
-    if(m.kind==="coarse" && m.altQuality) return openCoarseModeSheet(mid);
-    if(m.kind==="coarse"||m.kind==="grind") return openShiftStart(mid);
+    if(m.kind==="coarse") return openCoarseLineSheet(mid);
+    if(m.kind==="grind") return openShiftStart(mid);
     if(m.kind==="autoclave") return openAutoclaveOn(mid);
     return openRefinerOn(mid);
   }
-  /* R2 can run the coarse line (shiftwise) OR refine a batch to its alternate grade (Medium). */
-  function openCoarseModeSheet(mid){
-    var m=M(mid), aq=m.altQuality;
+  /* Coarse-line machines (PR1, R2) can run the coarse line (default, shiftwise) OR the special line (refine a batch to any grade). */
+  function openCoarseLineSheet(mid){
+    var m=M(mid);
     openSheet('<div class="sheet-h"><span class="led" style="background:radial-gradient(circle at 35% 30%,#f6c08a,var(--ember))"></span><b>Start '+esc(m.name)+'</b></div>'+
-      '<div class="sheet-sub">What is '+esc(m.short)+' running this time?</div>'+
+      '<div class="sheet-sub">Is '+esc(m.short)+' running the coarse line or the special line this time?</div>'+
       '<div class="pickgrid">'+
-        '<button class="pick" data-cmode="coarse"><b>Coarse line</b><small>shiftwise · weigh in Weigh tab</small></button>'+
-        '<button class="pick" data-cmode="qual"><b>'+esc(aq)+' grade</b><small>refine a batch to '+esc(aq)+'</small></button>'+
+        '<button class="pick" data-cmode="coarse"><b>Coarse line</b><small>default · shiftwise coarse output</small></button>'+
+        '<button class="pick" data-cmode="special"><b>Special line</b><small>refine a batch · any quality</small></button>'+
       '</div>'+
       '<div class="sheet-actions"><button class="btn ghost" data-act="close">Cancel</button></div>');
     sheet.querySelectorAll("[data-cmode]").forEach(function(el){
       el.addEventListener("click",function(){
         var mode=el.getAttribute("data-cmode");
-        if(mode==="coarse") openShiftStart(mid); else openRefinerOn(mid, aq);
+        if(mode==="coarse") openShiftStart(mid); else openRefinerOn(mid, null, {asSpecial:true});
       });
     });
   }
@@ -2771,9 +2680,11 @@
     });
   }
 
-  function openRefinerOn(mid, forceQuality){
+  function openRefinerOn(mid, forceQuality, opts){
     var m=M(mid), elig=eligibleBatches();
-    var forced=forceQuality||null, wantQuality=(m.needsQuality||!!forced);
+    var asSpecial=!!(opts&&opts.asSpecial);
+    var canWeigh=(mid==="R2"||mid==="R4");           // R2 & R4 can run as production (weigh) or not
+    var forced=forceQuality||null, wantQuality=(m.needsQuality||!!forced||asSpecial);
     var lr=lastRunFor(mid);
     var preElec=(lr&&lr.elecEnd!=null&&lr.elecEnd!=="")?lr.elecEnd:"";
     var preHour=(lr&&lr.hourEnd!=null&&lr.hourEnd!=="")?lr.hourEnd:"";
@@ -2784,17 +2695,21 @@
         '<div class="sheet-actions"><button class="btn ghost" data-act="close">Close</button></div>');
       return;
     }
-    var picks={ batchId:null, quality:forced, mix:[] };
+    var picks={ batchId:null, quality:forced, mix:[], weigh:true };
     var batchBtns=elig.slice().reverse().map(function(b){
       return '<button class="pick" data-pick-batch="'+b.id+'"><b>'+esc(b.no)+'</b><small>'+esc(b.formulation)+'</small></button>';
     }).join("");
     var qBtns = forced
       ? ('<div class="sheet-label">Quality</div><div class="pickgrid q4"><button class="pick q sel" disabled style="opacity:1"><b><span class="qdot" style="background:var(--q-'+forced.toLowerCase()+')"></span>'+esc(forced)+'</b><small>fixed for '+esc(m.short)+'</small></button></div>')
-      : (m.needsQuality?('<div class="sheet-label">Quality</div><div class="pickgrid q4">'+
+      : ((m.needsQuality||asSpecial)?('<div class="sheet-label">Quality</div><div class="pickgrid q4">'+
         QUALITIES.map(function(q){ return '<button class="pick q" data-pick-q="'+q+'"><b><span class="qdot" style="background:var(--q-'+q.toLowerCase()+')"></span>'+q+'</b></button>'; }).join("")+'</div>'):'');
-    openSheet('<div class="sheet-h"><span class="led"></span><b>Start '+esc(m.name)+(forced?' · '+esc(forced):'')+'</b></div>'+
-      '<div class="sheet-sub">'+(forced?(esc(forced)+' grade · '):(m.sub?esc(m.sub.charAt(0).toUpperCase()+m.sub.slice(1))+' · ':''))+'Pick batch'+(wantQuality&&!forced?' and quality.':'.')+'</div>'+
-      '<div class="sheet-label">Batch</div><div class="pickgrid">'+batchBtns+'</div>'+qBtns+
+    var prodBtns = canWeigh ? ('<div class="sheet-label" style="margin-top:14px">Run type</div><div class="pickgrid">'+
+        '<button class="pick sel" data-prod="1"><b>Production</b><small>default · weigh the output</small></button>'+
+        '<button class="pick" data-prod="0"><b>Non-production</b><small>no weighing · rare</small></button>'+
+      '</div>') : '';
+    openSheet('<div class="sheet-h"><span class="led"></span><b>Start '+esc(m.name)+(forced?' · '+esc(forced):'')+(asSpecial?' · special line':'')+'</b></div>'+
+      '<div class="sheet-sub">'+(forced?(esc(forced)+' grade · '):(asSpecial?'Running the special line · ':(m.sub?esc(m.sub.charAt(0).toUpperCase()+m.sub.slice(1))+' · ':'')))+'Pick batch'+(wantQuality&&!forced?' and quality.':'.')+'</div>'+
+      '<div class="sheet-label">Batch</div><div class="pickgrid">'+batchBtns+'</div>'+qBtns+prodBtns+
       '<div id="mixbox" style="display:none"><div class="sheet-label" style="margin-top:14px">Mixed from <span class="muted" style="text-transform:none;letter-spacing:0">— add tailings of other batches</span></div><div class="pickgrid" id="mixgrid"></div></div>'+
       '<div class="field-inline" style="margin-top:14px">'+
         '<div class="field"><label>Date</label><input id="rf-date" type="date" value=""></div>'+
@@ -2815,6 +2730,9 @@
         sheet.querySelector("#mixbox").style.display=mixable?"block":"none";
         if(!mixable) picks.mix=[];
         renderMix(); checkGo(); });
+    });
+    sheet.querySelectorAll("[data-prod]").forEach(function(el){
+      el.addEventListener("click",function(){ picks.weigh=el.getAttribute("data-prod")==="1"; sel(sheet.querySelectorAll("[data-prod]"),el); });
     });
     function renderMix(){
       var box=sheet.querySelector("#mixgrid"); if(!box) return;
@@ -2844,7 +2762,7 @@
       if(h0 && (h0.value||"").trim()!=="" && num(h0.value)<=0){ toast("Initial hour-meter reading must be greater than zero","warn"); return; }
       var rdt=(sheet.querySelector("#rf-date")||{}).value||""; if(!rdt){ toast("Pick a date","warn"); return; }
       var rsh=(sheet.querySelector("#rf-shift")||{}).value||autoShift();
-      startRefiner(mid,picks.batchId,picks.quality,src,num(sheet.querySelector("#rf-elec").value),num(sheet.querySelector("#rf-hour").value),rdt,rsh); });
+      startRefiner(mid,picks.batchId,picks.quality,src,num(sheet.querySelector("#rf-elec").value),num(sheet.querySelector("#rf-hour").value),rdt,rsh,{weigh:(canWeigh?picks.weigh:!!m.weigh)}); });
     function checkGo(){ go.disabled=!(picks.batchId && (!wantQuality || picks.quality)); }
     function sel(group,one){ group.forEach(function(g){ g.classList.remove("sel"); }); one.classList.add("sel"); }
     if(forced && (forced==="Fine"||forced==="Medium")){ sheet.querySelector("#mixbox").style.display="block"; renderMix(); }
@@ -3061,18 +2979,12 @@
   }
 
   /* ===================== render & events ===================== */
-  function openSettings(){
-    if(authRole()==="admin"){ active="settings"; render(); }
-    else openAccountSheet();
-  }
+  function openSettings(){ active="settings"; render(); }
 
   function render(){
-    if(!getAuth()){ var lel=document.getElementById("login"); if(!lel || lel.style.display!=="flex") showLogin(); return; }
-    var role=authRole();
-    var allow=allowedTabs().map(function(t){ return t.id; });
-    if(active==="settings"){ if(role!=="admin") active=allow[0]||"machines"; }
-    else if(allow.indexOf(active)<0) active=allow[0]||"machines";
-    var lt=document.querySelector(".linetag"); if(lt){ var a=getAuth(); lt.textContent=a?(a.name+" · "+roleLabel(a.role)):""; }
+    var role=state.settings.role;
+    if(role==="supervisor" && (active==="reports"||active==="dispatch"||active==="quality")) active="machines";
+    if(role==="qc" && active!=="quality" && active!=="settings") active="quality";
     renderTabs();
     var rc=runningCount(), el=document.getElementById("runcount");
     el.textContent=rc+" RUNNING"; el.className="runcount"+(rc?"":" zero");
@@ -3162,12 +3074,15 @@
     }
     else if(act==="export"){ exportCSV(); }
     else if(act==="force-update"){ forceUpdate(); }
-    else if(act==="logout"){ logout(); }
-    else if(act==="open-settings"){ closeSheet(); if(authRole()==="admin"){ active="settings"; render(); } }
-    else if(act==="save-pins"){
-      state.settings.pins=state.settings.pins||{};
-      ACCOUNTS.forEach(function(ac){ var el=document.getElementById("pin-"+ac.user); if(el){ var v=(el.value||"").replace(/\D/g,"").slice(0,8); state.settings.pins[ac.user]=v; } });
-      save(); toast("Login PINs saved","ok"); render();
+    else if(act==="set-role"){
+      var dEl=document.getElementById("set-device"), uEl=document.getElementById("set-url"), pEl=document.getElementById("set-pin");
+      var sbU=document.getElementById("set-sburl"), sbK=document.getElementById("set-sbkey");
+      if(dEl) state.settings.device=(dEl.value||"").trim();
+      if(uEl) state.settings.syncUrl=(uEl.value||"").trim();
+      if(sbU) state.settings.supabaseUrl=(sbU.value||"").trim();
+      if(sbK) state.settings.supabaseKey=(sbK.value||"").trim();
+      if(pEl) state.settings.pin=(pEl.value||"").replace(/\D/g,"").slice(0,6);
+      state.settings.role=a.getAttribute("data-role"); save(); render();
     }
     else if(act==="save-settings"){
       state.settings.device=(document.getElementById("set-device").value||"").trim();
@@ -3251,10 +3166,8 @@
     },{passive:false});
   })();
   load();
-  if(getAuth()){ applyAuthDefaults(); render(); } else { showLogin(); }
+  render();
   scheduleAutoSync(3000);
-  setInterval(heartbeatSession, 60000);   // keep this device's session alive for the supervisor lock
-  window.addEventListener("beforeunload", function(){ if(authRole()) releaseSession(); });
   // Hydrate from the shared master copy on open; if the master is empty/behind and this
   // phone already holds real data, seed the master from here.
   setTimeout(function(){
