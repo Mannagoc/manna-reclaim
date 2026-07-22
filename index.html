@@ -1672,11 +1672,12 @@
   }
 
   function viewBatches(){
-    var act=activeBatches();
+    var act=activeBatches().filter(function(b){ return !b.shiftwise; });   // coarse batches excluded from Batches view
     if(!act.length) return '<div class="view-head"><h1>Batches</h1></div>'+
       empty('<path d="M12 2 3 7l9 5 9-5-9-5Z"/><path d="M3 17l9 5 9-5"/><path d="M3 12l9 5 9-5"/>',
         "No active batches","Load the autoclave on the Machines tab to start one. Finished batches drop off here automatically.");
-    var done=state.batches.length-act.length;
+    var allActive=activeBatches().filter(function(b){ return !b.shiftwise; });
+    var done=state.batches.filter(function(b){ return !b.shiftwise; }).length-allActive.length;
     var cards=act.slice().reverse().map(batchCard).join("");
     var meta=act.length+' active'+(done?' · '+done+' done':'');
     return '<div class="view-head"><h1>Batches</h1><div class="meta">'+meta+'</div></div><div class="stack">'+cards+'</div>';
@@ -2526,7 +2527,7 @@
       '<div class="hint" style="margin-top:10px">"Re-send all" pushes every record again. It is safe — records update by id and won\'t duplicate. '+esc(storeNote)+'</div>'+
       '<div style="margin-top:12px"><button class="btn ghost block" data-act="force-update">↻ Update app to latest version</button></div>'+
       '<div class="hint" style="margin-top:8px;opacity:.85">Use this if the tablet is stuck on an old version. It clears the cache and reloads the newest code from the server (needs internet).</div>'+
-      '<div class="hint" style="margin-top:6px;opacity:.7">Build: app v36 · sync v6 · supabase</div></div>'+
+      '<div class="hint" style="margin-top:6px;opacity:.7">Build: app v37 · sync v6 · supabase</div></div>'+
 
       '<div class="panel" style="margin-top:14px"><div class="sheet-label" style="margin:0 0 10px">Customers & selling price</div>'+
       ((state.settings.customers||[]).length
