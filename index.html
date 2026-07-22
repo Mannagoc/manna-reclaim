@@ -674,7 +674,7 @@
       '<button class="btn primary" data-closebatch-go="'+b.id+'">Close batch</button></div>'); }
   function closeBatch(id){ var b=batch(id); if(!b) return; b.closed=true; save(); closeSheet(); render(); toast("Batch "+b.no+" closed","ok"); }
   function batchInAC(b){ return MACHINES.some(function(mm){ return mm.kind==="autoclave" && state.machines[mm.id] && state.machines[mm.id].running && state.machines[mm.id].running.batchId===b.id; }); }
-  function batchOrphaned(b){ return state.runs.filter(function(r){ return r.batchId===b.id; }).length===0 && !batchInAC(b); }   // autoclave entry deleted (or never captured) & not currently loaded
+  function batchOrphaned(b){ return state.runs.filter(function(r){ return (r.batchId && r.batchId===b.id) || (!r.batchId && String(r.batchNo)===String(b.no)); }).length===0 && !batchInAC(b); }
   function openBatchDetail(id){
     var b=batch(id); if(!b){ closeSheet(); return; }
     var runs=state.runs.filter(function(r){ return r.batchId===id; }).sort(function(a,c){ return (a.end||0)-(c.end||0); });
@@ -2225,15 +2225,18 @@
     if(!state.runs.length) return '<div class="view-head"><h1>History</h1></div>'+
       empty('<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 4v4h4"/>',"No runs logged","Captured runs from every machine show up here.");
     var runs=state.runs.slice();
-    var dateSet={}, batchSet={};
+    var dateSet={}, batchSet={}, coarseBatchSet={};
     runs.forEach(function(r){
       var d=runDate(r); if(d) dateSet[d]=true;
-      if(r.line==="special" && r.batchNo) batchSet[String(r.batchNo)]=true;   // special-line batches only
+      if(r.line==="special" && r.batchNo) batchSet[String(r.batchNo)]=true;
+      if((r.line==="coarse"||r.shiftwise) && r.batchNo) coarseBatchSet[String(r.batchNo)]=true;
     });
     var dates=Object.keys(dateSet).sort().reverse();
     var batches=Object.keys(batchSet).sort(function(a,b){ var na=parseFloat(a),nb=parseFloat(b); if(!isNaN(na)&&!isNaN(nb)) return nb-na; return a<b?1:-1; });
+    var coarseBatches=Object.keys(coarseBatchSet).sort(function(a,b){ var na=parseFloat(a),nb=parseFloat(b); if(!isNaN(na)&&!isNaN(nb)) return nb-na; return a<b?1:-1; });
+    var allBatches=batches.concat(coarseBatches.filter(function(b){ return batches.indexOf(b)<0; }));
     if(histFilter.date!=="all" && dates.indexOf(histFilter.date)<0) histFilter.date="all";
-    if(histFilter.batch!=="all" && batches.indexOf(histFilter.batch)<0) histFilter.batch="all";
+    if(histFilter.batch!=="all" && allBatches.indexOf(histFilter.batch)<0) histFilter.batch="all";
 
     var batchMode = histFilter.batch!=="all";
     var fr = runs.filter(function(r){
@@ -2246,7 +2249,9 @@
 
     var dOpts='<option value="all">All days</option>'+dates.map(function(d){ return '<option value="'+esc(d)+'"'+(histFilter.date===d?" selected":"")+'>'+esc(fmtDay(d))+'</option>'; }).join("");
     var sOpts=["all","Day","Night"].map(function(s){ return '<option value="'+s+'"'+(histFilter.shift===s?" selected":"")+'>'+(s==="all"?"Both shifts":s)+'</option>'; }).join("");
-    var bOpts='<option value="all">All batches (special)</option>'+batches.map(function(b){ return '<option value="'+esc(b)+'"'+(histFilter.batch===b?" selected":"")+'>#'+esc(b)+'</option>'; }).join("");
+    var bOpts='<option value="all">All batches</option>'+
+      (batches.length?'<optgroup label="Special / DRC">'+batches.map(function(b){ return '<option value="'+esc(b)+'"'+(histFilter.batch===b?" selected":"")+'>#'+esc(b)+'</option>'; }).join("")+'</optgroup>':'')+
+      (coarseBatches.length?'<optgroup label="Coarse">'+coarseBatches.map(function(b){ return '<option value="'+esc(b)+'"'+(histFilter.batch===b?" selected":"")+'>#'+esc(b)+'</option>'; }).join("")+'</optgroup>':'');
     var filters='<div class="histbar">'+
       '<div class="field" style="margin:0"><label>Day</label><select data-histfilter="date"'+(batchMode?' disabled':'')+'>'+dOpts+'</select></div>'+
       '<div class="field" style="margin:0"><label>Shift</label><select data-histfilter="shift"'+(batchMode?' disabled':'')+'>'+sOpts+'</select></div>'+
@@ -2521,7 +2526,7 @@
       '<div class="hint" style="margin-top:10px">"Re-send all" pushes every record again. It is safe — records update by id and won\'t duplicate. '+esc(storeNote)+'</div>'+
       '<div style="margin-top:12px"><button class="btn ghost block" data-act="force-update">↻ Update app to latest version</button></div>'+
       '<div class="hint" style="margin-top:8px;opacity:.85">Use this if the tablet is stuck on an old version. It clears the cache and reloads the newest code from the server (needs internet).</div>'+
-      '<div class="hint" style="margin-top:6px;opacity:.7">Build: app v34 · sync v6 · supabase</div></div>'+
+      '<div class="hint" style="margin-top:6px;opacity:.7">Build: app v35 · sync v6 · supabase</div></div>'+
 
       '<div class="panel" style="margin-top:14px"><div class="sheet-label" style="margin:0 0 10px">Customers & selling price</div>'+
       ((state.settings.customers||[]).length
@@ -2698,7 +2703,7 @@
   }
 
   function openRefinerOn(mid, forceQuality, opts){
-    var m=M(mid), elig=eligibleBatches();
+    var m=M(mid), elig=eligibleSpecialBatches();
     var asSpecial=!!(opts&&opts.asSpecial);
     var canWeigh=(mid==="R2"||mid==="R4");           // R2 & R4 can run as production (weigh) or not
     var forced=forceQuality||null, wantQuality=(m.needsQuality||!!forced||asSpecial);
@@ -2714,8 +2719,7 @@
     }
     var picks={ batchId:null, quality:forced, mix:[], weigh:true };
     var batchBtns=elig.slice().reverse().map(function(b){
-      var coarseBadge=b.shiftwise?'<span class="qchip shift" style="background:var(--ember);font-size:9px">Coarse</span> ':'';
-      return '<button class="pick" data-pick-batch="'+b.id+'"><b>'+coarseBadge+esc(b.no)+'</b><small>'+esc(b.formulation)+'</small></button>';
+      return '<button class="pick" data-pick-batch="'+b.id+'"><b>'+esc(b.no)+'</b><small>'+esc(b.formulation)+'</small></button>';
     }).join("");
     var qBtns = forced
       ? ('<div class="sheet-label">Quality</div><div class="pickgrid q4"><button class="pick q sel" disabled style="opacity:1"><b><span class="qdot" style="background:var(--q-'+forced.toLowerCase()+')"></span>'+esc(forced)+'</b><small>fixed for '+esc(m.short)+'</small></button></div>')
