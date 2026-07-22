@@ -655,6 +655,8 @@
 
   /* ===================== helpers ===================== */
   function eligibleBatches(){ return state.batches.filter(function(b){ return b.autoclaveDone && !b.closed; }); }
+  function eligibleSpecialBatches(){ return state.batches.filter(function(b){ return b.autoclaveDone && !b.closed && !b.shiftwise; }); }
+  function eligibleCoarseBatches(){ return state.batches.filter(function(b){ return b.autoclaveDone && !b.closed && b.shiftwise; }); }
   function batchTaken(b){ return (b.qualities && b.qualities.length) ? b.qualities : []; }
   function qualWeighed(b,q){ return state.runs.some(function(r){ return r.batchId===b.id && !r.shiftwise && r.quality===q && r.weightKg!==""&&r.weightKg!=null && (r.machineId==="R4"||r.needsWeigh); }); }
   function allTakenWeighed(b){ var t=batchTaken(b); if(!t.length) return false;
@@ -2403,6 +2405,21 @@
       var negs=[["Run time",r.runtimeMin],["Workers",r.workers],["Firewood",r.firewoodKg],["Energy",r.kWh],["Output weight",r.weightKg]];
       for(var ni=0;ni<negs.length;ni++){ if(negs[ni][1]!=null && negs[ni][1]!=="" && num(negs[ni][1])<0){ toast(negs[ni][0]+" can't be negative","warn"); return; } }
       r.synced=false;                                   // re-push: upsert updates the DB row
+      // If the batch number was changed on an autoclave run, also update the batch object so
+      // Batches view and refiner selector stay in sync
+      if(isAuto && r.batchId){
+        var linkedBatch=batch(r.batchId);
+        if(linkedBatch && linkedBatch.no!==r.batchNo) linkedBatch.no=r.batchNo;
+      }
+      // For non-autoclave runs, propagate batchNo change to every run sharing the same batchId
+      if(!isAuto && r.batchId){
+        var linkedBatch2=batch(r.batchId);
+        if(linkedBatch2 && linkedBatch2.no!==r.batchNo){
+          var oldNo=linkedBatch2.no;
+          linkedBatch2.no=r.batchNo;
+          state.runs.forEach(function(rx){ if(rx.batchId===r.batchId && rx.batchNo===oldNo) rx.batchNo=r.batchNo; });
+        }
+      }
       save(); closeSheet(); render();
       toast("Entry updated"+(syncTarget()?" — will re-sync":""),"ok");
       scheduleAutoSync(500);
@@ -2504,7 +2521,7 @@
       '<div class="hint" style="margin-top:10px">"Re-send all" pushes every record again. It is safe — records update by id and won\'t duplicate. '+esc(storeNote)+'</div>'+
       '<div style="margin-top:12px"><button class="btn ghost block" data-act="force-update">↻ Update app to latest version</button></div>'+
       '<div class="hint" style="margin-top:8px;opacity:.85">Use this if the tablet is stuck on an old version. It clears the cache and reloads the newest code from the server (needs internet).</div>'+
-      '<div class="hint" style="margin-top:6px;opacity:.7">Build: app v33 · sync v6 · supabase</div></div>'+
+      '<div class="hint" style="margin-top:6px;opacity:.7">Build: app v34 · sync v6 · supabase</div></div>'+
 
       '<div class="panel" style="margin-top:14px"><div class="sheet-label" style="margin:0 0 10px">Customers & selling price</div>'+
       ((state.settings.customers||[]).length
@@ -2697,7 +2714,8 @@
     }
     var picks={ batchId:null, quality:forced, mix:[], weigh:true };
     var batchBtns=elig.slice().reverse().map(function(b){
-      return '<button class="pick" data-pick-batch="'+b.id+'"><b>'+esc(b.no)+'</b><small>'+esc(b.formulation)+'</small></button>';
+      var coarseBadge=b.shiftwise?'<span class="qchip shift" style="background:var(--ember);font-size:9px">Coarse</span> ':'';
+      return '<button class="pick" data-pick-batch="'+b.id+'"><b>'+coarseBadge+esc(b.no)+'</b><small>'+esc(b.formulation)+'</small></button>';
     }).join("");
     var qBtns = forced
       ? ('<div class="sheet-label">Quality</div><div class="pickgrid q4"><button class="pick q sel" disabled style="opacity:1"><b><span class="qdot" style="background:var(--q-'+forced.toLowerCase()+')"></span>'+esc(forced)+'</b><small>fixed for '+esc(m.short)+'</small></button></div>')
