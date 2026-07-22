@@ -2250,8 +2250,8 @@
     var dOpts='<option value="all">All days</option>'+dates.map(function(d){ return '<option value="'+esc(d)+'"'+(histFilter.date===d?" selected":"")+'>'+esc(fmtDay(d))+'</option>'; }).join("");
     var sOpts=["all","Day","Night"].map(function(s){ return '<option value="'+s+'"'+(histFilter.shift===s?" selected":"")+'>'+(s==="all"?"Both shifts":s)+'</option>'; }).join("");
     var bOpts='<option value="all">All batches</option>'+
-      (batches.length?'<optgroup label="Special / DRC">'+batches.map(function(b){ return '<option value="'+esc(b)+'"'+(histFilter.batch===b?" selected":"")+'>#'+esc(b)+'</option>'; }).join("")+'</optgroup>':'')+
-      (coarseBatches.length?'<optgroup label="Coarse">'+coarseBatches.map(function(b){ return '<option value="'+esc(b)+'"'+(histFilter.batch===b?" selected":"")+'>#'+esc(b)+'</option>'; }).join("")+'</optgroup>':'');
+      batches.map(function(b){ return '<option value="'+esc(b)+'"'+(histFilter.batch===b?" selected":"")+'>#'+esc(b)+'</option>'; }).join("")+
+      (coarseBatches.length?'<option value="" disabled>── Coarse ──</option>'+coarseBatches.map(function(b){ return '<option value="'+esc(b)+'"'+(histFilter.batch===b?" selected":"")+'>C#'+esc(b)+'</option>'; }).join(""):'');
     var filters='<div class="histbar">'+
       '<div class="field" style="margin:0"><label>Day</label><select data-histfilter="date"'+(batchMode?' disabled':'')+'>'+dOpts+'</select></div>'+
       '<div class="field" style="margin:0"><label>Shift</label><select data-histfilter="shift"'+(batchMode?' disabled':'')+'>'+sOpts+'</select></div>'+
@@ -2526,7 +2526,7 @@
       '<div class="hint" style="margin-top:10px">"Re-send all" pushes every record again. It is safe — records update by id and won\'t duplicate. '+esc(storeNote)+'</div>'+
       '<div style="margin-top:12px"><button class="btn ghost block" data-act="force-update">↻ Update app to latest version</button></div>'+
       '<div class="hint" style="margin-top:8px;opacity:.85">Use this if the tablet is stuck on an old version. It clears the cache and reloads the newest code from the server (needs internet).</div>'+
-      '<div class="hint" style="margin-top:6px;opacity:.7">Build: app v35 · sync v6 · supabase</div></div>'+
+      '<div class="hint" style="margin-top:6px;opacity:.7">Build: app v36 · sync v6 · supabase</div></div>'+
 
       '<div class="panel" style="margin-top:14px"><div class="sheet-label" style="margin:0 0 10px">Customers & selling price</div>'+
       ((state.settings.customers||[]).length
